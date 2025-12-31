@@ -9,9 +9,9 @@
     <!-- Assembly Information -->
     <AssemblyName>MicPassthrough</AssemblyName>
     <Product>Microphone Passthrough</Product>
-    <Version>0.1.0</Version>
-    <AssemblyVersion>0.1.0.0</AssemblyVersion>
-    <FileVersion>0.1.0.0</FileVersion>
+    <Version>0.1.1</Version>
+    <AssemblyVersion>0.1.1.0</AssemblyVersion>
+    <FileVersion>0.1.1.0</FileVersion>
     
     <!-- Package Metadata -->
     <Authors>Michael Hill</Authors>
@@ -23,11 +23,14 @@
     <RepositoryUrl>https://github.com/mikejhill/mic-passthrough</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>audio;microphone;wasapi;vb-audio;phone-link;passthrough</PackageTags>
+    
+    <!-- Preserve COM support when trimming (required for NAudio WASAPI) -->
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.2.1" />
-    <PackageReference Include="CommandLineParser" Version="2.9.1" />
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
   </ItemGroup>
