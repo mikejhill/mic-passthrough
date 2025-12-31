@@ -397,7 +397,9 @@ class Program
                         monitorCts = new CancellationTokenSource();
                         var deviceManager = new AudioDeviceManager(wrappedLogger);
                         var micDevice = deviceManager.FindDevice(DataFlow.Capture, opts.Mic);
-                        audioMonitor = new ProcessAudioMonitor(wrappedLogger, micDevice.ID, opts.CableCapture);
+                        var cableCaptureDevice = deviceManager.FindDevice(DataFlow.Capture, opts.CableCapture);
+                        string cableDeviceId = cableCaptureDevice?.ID ?? null;
+                        audioMonitor = new ProcessAudioMonitor(wrappedLogger, micDevice.ID, cableDeviceId);
                         statusWindow.AddLog("Auto-switch monitor initialized");
                         
                         // Start ProcessAudioMonitor's internal device usage monitoring thread
@@ -514,10 +516,12 @@ class Program
                 try
                 {
                     var micDevice = deviceManager.FindDevice(DataFlow.Capture, opts.Mic);
+                    var cableCaptureDevice = deviceManager.FindDevice(DataFlow.Capture, opts.CableCapture);
                     string deviceId = micDevice.ID;
+                    string cableDeviceId = cableCaptureDevice?.ID ?? null;
                     
-                    // Create monitor with device ID and cable capture device name
-                    audioMonitor = new ProcessAudioMonitor(wrappedLogger, deviceId, opts.CableCapture);
+                    // Create monitor with device IDs (both as GUIDs, not names)
+                    audioMonitor = new ProcessAudioMonitor(wrappedLogger, deviceId, cableDeviceId);
                     statusWindow.AddLog("Auto-switch monitor initialized");
                     
                     // Start ProcessAudioMonitor's internal device usage monitoring thread
