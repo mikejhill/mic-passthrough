@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using NAudio.CoreAudioApi;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -84,7 +85,7 @@ public class PassthroughApplication
             // Initialize with device names and settings
             engine.Initialize(
                 options.Mic,
-                options.Cable,
+                options.CableRender,
                 options.Monitor,
                 options.EnableMonitor);
 
@@ -125,7 +126,7 @@ public class PassthroughApplication
         var monitor = new ProcessAudioMonitor(_logger, micDevice.ID);
         var micManager = new WindowsDefaultMicrophoneManager(_logger);
         // CABLE Input is a Render device (output), not Capture
-        var cableDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Render, options.Cable);
+        var cableDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Render, options.CableRender);
 
         bool engineRunning = false;
 
@@ -134,7 +135,7 @@ public class PassthroughApplication
             // Initialize engine with settings
             engine.Initialize(
                 options.Mic,
-                options.Cable,
+                options.CableRender,
                 options.Monitor,
                 options.EnableMonitor);
 
@@ -166,14 +167,26 @@ public class PassthroughApplication
                     
                     try
                     {
-                        // Switch default microphone to CABLE Output
-                        if (micManager.SetDefaultMicrophone(cableDevice.ID))
+                        // Find the configured CABLE capture device (default: CABLE Output) for setting as default microphone
+                        var cableOutputDevice = _deviceManager.FindDevice(
+                            NAudio.CoreAudioApi.DataFlow.Capture, 
+                            options.CableCapture);
+                        
+                        if (cableOutputDevice != null)
                         {
-                            _logger.LogInformation("Windows default microphone switched to CABLE Output");
+                            // Switch default microphone to CABLE capture device
+                            if (micManager.SetDefaultMicrophone(cableOutputDevice.ID))
+                            {
+                                _logger.LogInformation("Windows default microphone switched to: {Device}", cableOutputDevice.FriendlyName);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("Could not switch Windows default microphone");
+                            }
                         }
                         else
                         {
-                            _logger.LogWarning("Could not switch Windows default microphone");
+                            _logger.LogWarning("CABLE capture device not found: {Device}", options.CableCapture);
                         }
 
                         // Start audio passthrough
@@ -241,3 +254,4 @@ public class PassthroughApplication
         }
     }
 }
+
