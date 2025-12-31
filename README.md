@@ -114,7 +114,7 @@ List available audio devices:
 
 Route microphone to virtual cable:
 ```powershell
-.\src\MicPassthrough\bin\Debug\net10.0\MicPassthrough.exe --mic "Microphone (HD Pro Webcam C920)" --cable "CABLE Input (VB-Audio Virtual Cable)"
+.\src\MicPassthrough\bin\Debug\net10.0\MicPassthrough.exe --mic "Microphone (HD Pro Webcam C920)" --cable-render "CABLE Input (VB-Audio Virtual Cable)"
 ```
 
 > **Note**: Replace the path with your actual .exe location if using a different build configuration (e.g., Release build)
@@ -126,9 +126,16 @@ Route microphone to virtual cable:
     Microphone device name (exact match). Use --list-devices to see available names.
     [REQUIRED unless using --list-devices]
 
--c, --cable <device-name>
-    VB-Cable input device name (exact match).
+-c, --cable-render <device-name>
+    VB-Cable render device name for audio passthrough output (exact match).
+    This is the VB-Audio Virtual Cable INPUT device (playback/speaker side).
     [default: CABLE Input (VB-Audio Virtual Cable)]
+
+--cable-capture <device-name>
+    VB-Cable capture device name for setting as default microphone (exact match).
+    This is the VB-Audio Virtual Cable OUTPUT device (recording/microphone side).
+    Only used with --auto-switch mode.
+    [default: CABLE Output (VB-Audio Virtual Cable)]
 
 -o, --monitor <device-name>
     Monitor output device name (exact match). Only used with --enable-monitor.
