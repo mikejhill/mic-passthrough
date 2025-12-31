@@ -332,6 +332,13 @@ class Program
         // Helper method for mode switching logic
         void HandleModeSwitch(string mode)
         {
+            // Don't do anything if already in the requested mode
+            if (currentMode == mode)
+            {
+                logger.LogDebug("Already in {Mode} mode, ignoring mode switch request", mode);
+                return;
+            }
+            
             // Stop passthrough before switching modes
             if (isPassthroughActive)
                 StopPassthrough();
