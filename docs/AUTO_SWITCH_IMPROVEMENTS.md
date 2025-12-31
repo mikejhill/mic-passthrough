@@ -84,6 +84,54 @@ This shows the actual value written (device ID GUID).
 
 **Impact:** Registry is confirmed to be written successfully. Applications and Phone Link will use the new default on next startup or when they re-query the default device.
 
+### Issue 4: Session Detection Not Identifying Phone Link or Detecting Session End ✅ FIXED
+**Problem:** The original detection couldn't:
+1. Differentiate between Phone Link sessions and other applications using the microphone
+2. Reliably detect when Phone Link released the microphone (sessions might linger)
+
+**Root Cause:** 
+- Counting all active sessions was too broad - other apps (Discord, Teams, etc.) would trigger passthrough
+- NAudio's `AudioSessionManager.Sessions` collection doesn't always immediately clear when sessions end
+- Only checking for session count doesn't track session lifecycle
+
+**Fix:** Implement session tracking that:
+1. **Identifies specific process IDs** - Match sessions to PhoneExperienceHost and related svchost processes
+2. **Tracks session history** - Remember which sessions existed in previous checks
+3. **Detects session changes** - Compare current sessions to previous sessions to detect:
+   - New sessions appearing (call started)
+   - Sessions disappearing (call ended)
+4. **Filters by process** - Ignore sessions from other applications
+
+```csharp
+// Track specific process IDs
+private HashSet<int> _trackedPhoneLinkProcessIds = new HashSet<int>();
+private HashSet<int> _lastSeenPhoneLinkSessions = new HashSet<int>();
+
+// For each session:
+uint sessionPid = session.GetProcessID;
+
+// Check if session belongs to Phone Link process
+if (phoneExperienceIds.Contains((int)sessionPid))
+{
+    currentPhoneLinkSessions.Add(i);
+}
+// Or if it's svchost (Windows Runtime host used by Phone Link during calls)
+else if (IsServiceHostRelatedToPhoneLink((int)sessionPid))
+{
+    currentPhoneLinkSessions.Add(i);
+}
+
+// Detect changes between current and previous check
+var newSessions = currentPhoneLinkSessions.Except(_lastSeenPhoneLinkSessions);
+var endedSessions = _lastSeenPhoneLinkSessions.Except(currentPhoneLinkSessions);
+```
+
+**Impact:** 
+- ✅ Can now reliably detect when Phone Link **releases** the microphone (sessions disappear)
+- ✅ Won't trigger passthrough if Discord/Teams/other apps use the microphone
+- ✅ Reduces false positives and false negatives significantly
+- ✅ Detailed logging shows which sessions are Phone Link vs other apps
+
 ## How Phone Link Detection Works
 
 ### Challenge
@@ -168,13 +216,18 @@ Before testing auto-switch mode, verify:
 
 4. **Open Phone Link and start a call** - you should see:
    ```
-   [HH:MM:SS] info: Program[0] Phone Link is using microphone (PhoneExperienceHost running + 1 active session)
+   [HH:MM:SS] dbug: Program[0] Phone Link process check: 1 instance running
+   [HH:MM:SS] dbug: Program[0] Device audio sessions count: 2
+   [HH:MM:SS] dbug: Program[0]   [Session 0] Process ID: 1234, State: 1
+   [HH:MM:SS] dbug: Program[0]   [Session 0] Phone Link process detected
+   [HH:MM:SS] dbug: Program[0] New Phone Link sessions: 0
+   [HH:MM:SS] info: Program[0] Phone Link is actively using microphone (1 session)
    [HH:MM:SS] info: Program[0] Saved original default microphone (Console role): Microphone (HD Pro Webcam C920) (ID: {0.0.1.00000000}.{...})
    [HH:MM:SS] info: Program[0] Attempting to set default microphone to device ID: {0.0.0.00000000}.{...}
    [HH:MM:SS] info: Program[0] Registry key exists. Setting Default value to: {0.0.0.00000000}.{...}
    [HH:MM:SS] info: Program[0] Verification: Registry Default value is now: {0.0.0.00000000}.{...}
    [HH:MM:SS] info: Program[0] Set default microphone to: CABLE Input (VB-Audio Virtual Cable)
-   [HH:MM:SS] dbug: Program[0] Audio passthrough started
+   [HH:MM:SS] info: Program[0] Audio passthrough activated
    ```
 
 5. **Verify Registry change** (in new PowerShell window while call is active):
@@ -190,8 +243,12 @@ Before testing auto-switch mode, verify:
 
 7. **End the call** - you should see:
    ```
-   [HH:MM:SS] dbug: Program[0] PhoneExperienceHost running but no active microphone sessions
-   [HH:MM:SS] dbug: Program[0] Audio passthrough stopped
+   [HH:MM:SS] dbug: Program[0] Phone Link process check: 1 instance running
+   [HH:MM:SS] dbug: Program[0] Device audio sessions count: 1
+   [HH:MM:SS] dbug: Program[0] Phone Link sessions ended: 0
+   [HH:MM:SS] dbug: Program[0] Phone Link running but no active microphone sessions
+   [HH:MM:SS] info: Program[0] Phone Link released the microphone
+   [HH:MM:SS] info: Program[0] Audio passthrough deactivated
    [HH:MM:SS] info: Program[0] Restored original microphone: Microphone (HD Pro Webcam C920)
    ```
 
