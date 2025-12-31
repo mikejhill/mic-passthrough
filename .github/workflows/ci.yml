@@ -29,12 +29,12 @@ jobs:
     - name: Run Unit Tests
       # Hardware tests are NOT run in CI (RUN_HARDWARE_TESTS not set)
       # This ensures fast, reliable builds without requiring audio hardware
-      run: dotnet test --configuration Release --no-build --verbosity normal
+      run: dotnet test --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx" --results-directory ./TestResults
 
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: test-results
-        path: '**/TestResults/**'
+        path: TestResults/*.trx
         retention-days: 30
