@@ -1,8 +1,9 @@
 # Microphone Passthrough
 
-![Microphone Passthrough Logo](docs/assets/logo.png)
+[![CI](https://github.com/mikejhill/mic-passthrough/actions/workflows/ci.yml/badge.svg)](https://github.com/mikejhill/mic-passthrough/actions/workflows/ci.yml)
+[![Release](https://github.com/mikejhill/mic-passthrough/actions/workflows/release.yml/badge.svg)](https://github.com/mikejhill/mic-passthrough/actions/workflows/release.yml)
 
-*Application Icon: [docs/assets/icon.png](docs/assets/icon.png)*
+![Microphone Passthrough Logo](docs/assets/logo.png)
 
 A low-latency audio passthrough application that routes a microphone's audio to [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) using Windows WASAPI audio APIs.
 
