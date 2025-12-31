@@ -65,6 +65,16 @@ namespace MicPassthrough
         ERole_enum_count = 3
     }
 
+    /// <summary>
+    /// Data flow direction (Render = speakers/output, Capture = microphones/input)
+    /// </summary>
+    public enum EDataFlow
+    {
+        eRender = 0,    // Playback devices (speakers, headphones)
+        eCapture = 1,   // Recording devices (microphones)
+        eAll = 2        // All devices
+    }
+
     [ComImport, Guid("568b9108-44bf-40b4-9006-86afe5b5a620")]
     internal class CPolicyConfigVistaClient
     {
@@ -77,6 +87,49 @@ namespace MicPassthrough
 
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("f8679f50-850a-41cf-9c72-430f290290c8")]
     internal interface IPolicyConfig
+    {
+        [PreserveSig]
+        int GetMixFormat(string pszDeviceName, IntPtr ppFormat);
+
+        [PreserveSig]
+        int GetDeviceFormat(string pszDeviceName, bool bDefault, IntPtr ppFormat);
+
+        [PreserveSig]
+        int ResetDeviceFormat(string pszDeviceName);
+
+        [PreserveSig]
+        int SetDeviceFormat(string pszDeviceName, IntPtr pEndpointFormat, IntPtr mixFormat);
+
+        [PreserveSig]
+        int GetProcessingPeriod(string pszDeviceName, bool bDefault, IntPtr pmftDefaultPeriod, IntPtr pmftMinimumPeriod);
+
+        [PreserveSig]
+        int SetProcessingPeriod(string pszDeviceName, IntPtr pmftPeriod);
+
+        [PreserveSig]
+        int GetShareMode(string pszDeviceName, IntPtr pMode);
+
+        [PreserveSig]
+        int SetShareMode(string pszDeviceName, IntPtr mode);
+
+        [PreserveSig]
+        int GetPropertyValue(string pszDeviceName, bool bFxStore, IntPtr key, IntPtr pv);
+
+        [PreserveSig]
+        int SetPropertyValue(string pszDeviceName, bool bFxStore, IntPtr key, IntPtr pv);
+
+        [PreserveSig]
+        int SetDefaultEndpoint(string pszDeviceName, ERole role);
+
+        [PreserveSig]
+        int SetEndpointVisibility(string pszDeviceName, bool bVisible);
+    }
+
+    /// <summary>
+    /// Windows 10+ version of IPolicyConfig with proper EDataFlow support
+    /// </summary>
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("f8679f50-850a-41cf-9c72-430f290290c8")]
+    internal interface IPolicyConfig2
     {
         [PreserveSig]
         int GetMixFormat(string pszDeviceName, IntPtr ppFormat);
