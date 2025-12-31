@@ -23,7 +23,19 @@ public class ProcessAudioMonitor
     private HashSet<int> _trackedPhoneLinkProcessIds = new HashSet<int>();
     private HashSet<int> _lastSeenPhoneLinkSessions = new HashSet<int>();
     private long _lastPhoneLinkSessionTicks;  // Track when we last saw a Phone Link session
-    private const long GRACE_PERIOD_MS = 500;  // Grace period in milliseconds
+    
+    /// <summary>
+    /// Grace period (in milliseconds) to wait after Phone Link sessions disappear before declaring the call ended.
+    /// 
+    /// Currently set to 0 (disabled) because dual-device monitoring eliminates the need for it.
+    /// Phone Link can now be reliably detected on either the physical microphone or cable capture device
+    /// without interruption from switching the default microphone device.
+    /// 
+    /// Kept as a constant for future use in case edge cases are discovered during testing 
+    /// (e.g., if Phone Link briefly loses all audio sessions during complex call scenarios).
+    /// If re-enabled, a value of 500ms was the previous sweet spot.
+    /// </summary>
+    private const long GRACE_PERIOD_MS = 0;
 
     /// <summary>
     /// Creates a new instance of ProcessAudioMonitor.
@@ -164,7 +176,7 @@ public class ProcessAudioMonitor
                 }
                 if (endedSessions.Count > 0)
                 {
-                    _logger.LogInformation("Phone Link sessions ended: {Sessions}", string.Join(", ", endedSessions));
+                    _logger.LogDebug("Phone Link sessions ended: {Sessions}", string.Join(", ", endedSessions));
                 }
 
                 _lastSeenPhoneLinkSessions = currentPhoneLinkSessions;
@@ -174,7 +186,7 @@ public class ProcessAudioMonitor
                 {
                     // Update the timestamp - we just saw a Phone Link session
                     _lastPhoneLinkSessionTicks = DateTime.UtcNow.Ticks;
-                    _logger.LogInformation("Phone Link is actively using microphone ({SessionCount} session{S})", 
+                    _logger.LogDebug("Phone Link detected: {SessionCount} active session{S}", 
                         currentPhoneLinkSessions.Count,
                         currentPhoneLinkSessions.Count != 1 ? "s" : "");
                     return true;
@@ -192,7 +204,7 @@ public class ProcessAudioMonitor
                         }
                     }
                     
-                    _logger.LogDebug("Phone Link running but no active microphone sessions (grace period expired)");
+                    _logger.LogDebug("Phone Link sessions no longer active");
                     _lastPhoneLinkSessionTicks = 0;
                     return false;
                 }
