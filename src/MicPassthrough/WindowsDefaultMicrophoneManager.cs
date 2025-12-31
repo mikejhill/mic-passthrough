@@ -149,7 +149,7 @@ public class WindowsDefaultMicrophoneManager
     private void SetDeviceAsDefault(string deviceId)
     {
         // Windows stores default device settings in Registry under:
-        // Communications: HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture
+        // Communications/default microphone setting: HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture
         // We set the Default value to the device ID
         
         try
@@ -160,28 +160,44 @@ public class WindowsDefaultMicrophoneManager
                 return;
             }
 
-            // Update the Communications/default microphone setting
-            // This is the key used by Phone Link and most calling applications
+            // Try to update the Communications/default microphone setting
             var registryPath = @"Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture";
             
             try
             {
+                // First, try to open with write access
                 using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(registryPath, writable: true))
                 {
                     if (key == null)
                     {
-                        _logger.LogWarning("Could not access Registry key for audio device configuration");
-                        return;
+                        _logger.LogWarning("Registry key not found. Attempting to create...");
+                        // Try to create the key if it doesn't exist
+                        try
+                        {
+                            using (var createdKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(registryPath))
+                            {
+                                createdKey.SetValue("Default", deviceId);
+                                _logger.LogDebug("Created Registry key and set default microphone");
+                                return;
+                            }
+                        }
+                        catch (UnauthorizedAccessException)
+                        {
+                            _logger.LogError("Administrator privileges required to modify Registry. Run application as Administrator.");
+                            throw;
+                        }
                     }
-
-                    // Set the default device
-                    key.SetValue("Default", deviceId);
-                    _logger.LogDebug("Updated Registry - set default microphone to device ID: {DeviceId}", deviceId);
+                    else
+                    {
+                        // Set the default device
+                        key.SetValue("Default", deviceId);
+                        _logger.LogDebug("Updated Registry - set default microphone to device ID: {DeviceId}", deviceId);
+                    }
                 }
             }
             catch (UnauthorizedAccessException ex)
             {
-                _logger.LogError(ex, "Registry write requires administrator privileges. Run application as administrator.");
+                _logger.LogError(ex, "Registry write requires administrator privileges. Please run this application as Administrator.");
                 throw;
             }
             catch (Exception ex)

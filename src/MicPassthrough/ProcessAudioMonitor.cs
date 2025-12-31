@@ -14,6 +14,7 @@ public class ProcessAudioMonitor
     private readonly ILogger _logger;
     private readonly string _deviceId;
     private volatile bool _isDeviceInUse;
+    private int _ourProcessId;
 
     /// <summary>
     /// Creates a new instance of ProcessAudioMonitor.
@@ -25,6 +26,9 @@ public class ProcessAudioMonitor
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _deviceId = deviceId ?? throw new ArgumentNullException(nameof(deviceId));
         _isDeviceInUse = false;
+        // Store our own process ID so we can exclude our sessions
+        _ourProcessId = System.Diagnostics.Process.GetCurrentProcess().Id;
+        _logger.LogDebug("ProcessAudioMonitor initialized (our process ID: {ProcessId})", _ourProcessId);
     }
 
     /// <summary>
@@ -119,9 +123,11 @@ public class ProcessAudioMonitor
                 return false;
 
             var sessionEnumerator = sessionManager.Sessions;
-            bool callDetected = false;
             
-            // Look through all active sessions
+            // Look through all sessions and count active ones (excluding system and our own process)
+            int externalActiveSessionCount = 0;
+            bool phoneCallDetected = false;
+            
             for (int i = 0; i < sessionEnumerator.Count; i++)
             {
                 try
@@ -134,30 +140,32 @@ public class ProcessAudioMonitor
 
                     // Check if session is active
                     // AudioSessionState: Inactive=0, Active=1, Expired=2
-                    if ((int)session.State != 1)  // Only check active sessions
-                        continue;
-
-                    // Try to identify the session's display name
-                    // This helps us know if it's a calling app
-                    string sessionName = GetSessionDisplayName(session);
-                    
-                    _logger.LogDebug("Active audio session: {SessionName}", sessionName);
-                    
-                    // Check if this looks like a calling application
-                    // Phone Link, Teams, Skype, etc. typically show identifiable names
-                    if (IsCallingApplication(sessionName))
+                    if ((int)session.State == 1)  // Active
                     {
-                        _logger.LogInformation("Calling application detected: {SessionName}", sessionName);
-                        callDetected = true;
-                        break;
+                        // Try to identify the session's display name
+                        string sessionName = GetSessionDisplayName(session);
+                        
+                        _logger.LogDebug("Active audio session found: {SessionName}", sessionName);
+                        
+                        // Skip our own process's sessions (PassthroughEngine)
+                        // Sessions from "MicPassthrough" or from our process ID should be ignored
+                        if (sessionName.Contains("MicPassthrough", StringComparison.OrdinalIgnoreCase) ||
+                            sessionName.Contains("PassthroughEngine", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logger.LogDebug("Skipping our own process session: {SessionName}", sessionName);
+                            continue;
+                        }
+                        
+                        // This is an external session
+                        externalActiveSessionCount++;
+                        
+                        // Check if this looks like a calling application
+                        if (IsCallingApplication(sessionName))
+                        {
+                            _logger.LogInformation("Calling application detected: {SessionName}", sessionName);
+                            phoneCallDetected = true;
+                        }
                     }
-                    
-                    // If no specific app detected but there's an active audio session on our device,
-                    // and our device is the default recording device, assume it's the calling app
-                    // This handles cases where PhoneLink doesn't show a clear display name
-                    _logger.LogDebug("Active audio stream on microphone - assuming calling app");
-                    callDetected = true;
-                    break;
                 }
                 catch (Exception ex)
                 {
@@ -166,7 +174,18 @@ public class ProcessAudioMonitor
                 }
             }
 
-            return callDetected;
+            // If we have external active sessions (not from our process), a call is likely active
+            // If no external sessions (besides system), the call has ended
+            if (externalActiveSessionCount > 0 || phoneCallDetected)
+            {
+                _logger.LogDebug("External device usage detected: {ExternalSessions} external active sessions", externalActiveSessionCount);
+                return true;
+            }
+            else
+            {
+                _logger.LogDebug("No external active sessions detected on device");
+                return false;
+            }
         }
         catch (Exception ex)
         {
@@ -182,15 +201,33 @@ public class ProcessAudioMonitor
     {
         try
         {
-            // Try to access DisplayName property
-            var displayNameProp = session.GetType().GetProperty("DisplayName");
+            if (session == null)
+                return "Unknown";
+
+            // Try different ways to get display name based on NAudio session interface
+            var sessionType = session.GetType();
+            
+            // Try DisplayName property
+            var displayNameProp = sessionType.GetProperty("DisplayName");
             if (displayNameProp != null)
             {
                 var displayName = displayNameProp.GetValue(session) as string;
-                return !string.IsNullOrEmpty(displayName) ? displayName : "Unknown";
+                if (!string.IsNullOrEmpty(displayName))
+                    return displayName;
             }
+
+            // Try to get process name from session if available
+            try
+            {
+                var stateValue = session.GetType().GetProperty("State")?.GetValue(session);
+                _logger.LogDebug("Session state: {State}", stateValue);
+            }
+            catch { }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Error getting session display name");
+        }
 
         return "Unknown";
     }
