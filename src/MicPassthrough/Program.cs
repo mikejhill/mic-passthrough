@@ -386,13 +386,24 @@ class Program
                     
                     try
                     {
-                        // Wait for old monitor thread to exit before creating new one
+                        // Stop old monitor thread if still running
+                        if (monitorCts != null)
+                        {
+                            logger.LogDebug("Canceling old monitor thread...");
+                            monitorCts.Cancel();
+                            monitorCts.Dispose();
+                            monitorCts = null;
+                        }
+                        
+                        // Wait for old monitor thread to exit
                         if (monitorThread != null && monitorThread.IsAlive)
                         {
                             logger.LogDebug("Waiting for old monitor thread to exit...");
-                            monitorThread.Join(1000);  // Wait up to 1 second
+                            if (!monitorThread.Join(1000))
+                                logger.LogWarning("Old monitor thread did not exit in time");
                         }
                         
+                        // Create new cancellation token for the new monitor
                         monitorCts = new CancellationTokenSource();
                         var deviceManager = new AudioDeviceManager(wrappedLogger);
                         var micDevice = deviceManager.FindDevice(DataFlow.Capture, opts.Mic);
@@ -401,8 +412,8 @@ class Program
                         audioMonitor = new ProcessAudioMonitor(wrappedLogger, micDevice.ID, cableDeviceId);
                         statusWindow.AddLog("Auto-switch monitor initialized");
                         
-                        // Start ProcessAudioMonitor's internal device usage monitoring thread
-                        _ = audioMonitor.StartMonitoringAsync(CancellationToken.None);
+                        // Start ProcessAudioMonitor's internal device usage monitoring thread with proper cancellation token
+                        _ = audioMonitor.StartMonitoringAsync(monitorCts.Token);
                         
                         monitorThread = new Thread(() =>
                         {
@@ -523,8 +534,8 @@ class Program
                     audioMonitor = new ProcessAudioMonitor(wrappedLogger, deviceId, cableDeviceId);
                     statusWindow.AddLog("Auto-switch monitor initialized");
                     
-                    // Start ProcessAudioMonitor's internal device usage monitoring thread
-                    _ = audioMonitor.StartMonitoringAsync(CancellationToken.None);
+                    // Start ProcessAudioMonitor's internal device usage monitoring thread with proper cancellation token
+                    _ = audioMonitor.StartMonitoringAsync(monitorCts.Token);
                     
                     // Start background monitoring thread
                     monitorThread = new Thread(() =>
