@@ -238,6 +238,23 @@ This is the recommended mode for minimal interference with your other applicatio
 .\src\MicPassthrough\bin\Debug\net10.0\MicPassthrough.exe --mic "Microphone (HD Pro Webcam C920)" --verbose
 ```
 
+## Daemon Mode (Professional Background Operation)
+
+For a professional experience without a console window, use daemon mode with system tray integration:
+
+```powershell
+MicPassthrough.exe --mic "Microphone (HD Pro Webcam C920)" --daemon
+```
+
+Features:
+- 🎯 System tray icon with real-time status display
+- 🖱️ Double-click to toggle passthrough on/off
+- ⚙️ Right-click menu for Start/Stop/Exit controls  
+- 🔔 Status notifications for all user actions
+- 🎨 Professional application icon in tray
+
+For detailed daemon mode usage, architecture, and advanced options, see [Daemon Mode Documentation](docs/DAEMON_MODE.md).
+
 ## Testing
 
 After setting up the passthrough, verify that audio is being routed correctly using one of these methods:
