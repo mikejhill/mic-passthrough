@@ -228,7 +228,9 @@ class Program
                         try
                         {
                             micManager = new WindowsDefaultMicrophoneManager(wrappedLogger);
-                            micManager.SetDefaultMicrophone(opts.CableCapture);
+                            // Find the device ID for CABLE Output
+                            var cableDevice = deviceManager.FindDevice(DataFlow.Capture, opts.CableCapture);
+                            micManager.SetDefaultMicrophone(cableDevice.ID);
                             logger.LogInformation("Set default microphone to CABLE Output");
                         }
                         catch (Exception ex)
@@ -304,6 +306,9 @@ class Program
             }
         }
 
+        // Track current daemon mode state (for runtime switching)
+        string currentMode = daemonMode;
+
         // Wire up tray UI events
         trayUI.StartRequested += (s, e) => StartPassthrough();
         trayUI.StopRequested += (s, e) => StopPassthrough();
@@ -321,6 +326,99 @@ class Program
                 StopPassthrough();
             else
                 StartPassthrough();
+        };
+
+        // Wire up status window mode switching
+        statusWindow.ModeRequested += (s, mode) =>
+        {
+            // Stop passthrough before switching modes
+            if (isPassthroughActive)
+                StopPassthrough();
+            
+            // Update mode
+            string oldMode = currentMode;
+            if (mode == "enabled")
+            {
+                currentMode = "enabled";
+                opts.AutoSwitch = false;
+            }
+            else if (mode == "auto-switch")
+            {
+                currentMode = "auto-switch";
+                opts.AutoSwitch = true;
+            }
+            else if (mode == "disabled")
+            {
+                currentMode = "disabled";
+                opts.AutoSwitch = false;
+                // Disabled mode: no auto-start, manual only
+            }
+            
+            if (oldMode != currentMode)
+            {
+                logger.LogInformation("Mode switched: {OldMode} -> {NewMode}", oldMode, currentMode);
+                statusWindow.AddLog($"Mode switched: {oldMode} -> {currentMode}");
+                trayUI.ShowNotification("Mode Changed", $"Daemon mode: {currentMode}");
+                
+                // If switching to auto-switch and monitor not running, restart it
+                if (currentMode == "auto-switch" && audioMonitor == null)
+                {
+                    try
+                    {
+                        monitorCts = new CancellationTokenSource();
+                        var deviceManager = new AudioDeviceManager(wrappedLogger);
+                        var micDevice = deviceManager.FindDevice(DataFlow.Capture, opts.Mic);
+                        audioMonitor = new ProcessAudioMonitor(wrappedLogger, micDevice.ID, opts.CableCapture);
+                        statusWindow.AddLog("Auto-switch monitor initialized");
+                        
+                        var monitorThread = new Thread(() =>
+                        {
+                            bool lastDetectedInUse = false;
+                            while (!monitorCts.Token.IsCancellationRequested)
+                            {
+                                try
+                                {
+                                    bool isInUse = audioMonitor.IsDeviceInUse;
+                                    if (isInUse && !lastDetectedInUse && !isPassthroughActive)
+                                    {
+                                        logger.LogInformation("Call detected (device in use)");
+                                        StartPassthrough(isAutoStarted: true);
+                                    }
+                                    else if (!isInUse && lastDetectedInUse && isPassthroughActive && autoSwitchStarted)
+                                    {
+                                        logger.LogInformation("Call ended, stopping passthrough");
+                                        StopPassthrough();
+                                    }
+                                    lastDetectedInUse = isInUse;
+                                }
+                                catch (Exception ex)
+                                {
+                                    logger.LogError(ex, "Error in auto-switch monitor");
+                                }
+                                System.Threading.Thread.Sleep(500);
+                            }
+                        })
+                        {
+                            IsBackground = true
+                        };
+                        monitorThread.Start();
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Failed to enable auto-switch");
+                        statusWindow.AddLog($"ERROR enabling auto-switch: {ex.Message}");
+                    }
+                }
+                // If switching away from auto-switch, stop the monitor
+                else if (currentMode != "auto-switch" && monitorCts != null)
+                {
+                    monitorCts.Cancel();
+                    monitorCts.Dispose();
+                    audioMonitor = null;
+                    monitorCts = null;
+                    statusWindow.AddLog("Auto-switch monitor stopped");
+                }
+            }
         };
 
         // Wire up status window to show on tray double-click
@@ -341,11 +439,13 @@ class Program
 
         // Show initial notification
         trayUI.ShowNotification("Microphone Passthrough",
-            $"Daemon started\nMode: {daemonMode}\nMic: {opts.Mic}");
+            $"Daemon started\nMode: {currentMode}\nMic: {opts.Mic}");
         statusWindow.AddLog("Daemon mode started");
-        statusWindow.AddLog($"Mode: {daemonMode}");
+        statusWindow.AddLog($"Mode: {currentMode}");
         statusWindow.AddLog($"Microphone: {opts.Mic}");
         statusWindow.AddLog($"Cable: {opts.CableRender}");
+        statusWindow.AddLog("Click [Enabled], [Auto-Switch], or [Disabled] to change modes");
+        
 
         // Start auto-switch monitor if in auto-switch mode
         if (opts.AutoSwitch)

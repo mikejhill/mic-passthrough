@@ -22,6 +22,7 @@ public partial class StatusWindow : Form
     private const int MaxLogLines = 100;
 
     public event EventHandler<EventArgs> ToggleRequested;
+    public event EventHandler<string> ModeRequested;
 
     public StatusWindow(ILogger logger)
     {
@@ -129,6 +130,39 @@ public partial class StatusWindow : Form
             Padding = new Padding(10)
         };
 
+        // Mode label
+        var modeLabel = new Label
+        {
+            Text = "Mode:",
+            AutoSize = true,
+            Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold)
+        };
+        
+        // Mode buttons
+        var enabledModeButton = new Button
+        {
+            Text = "Enabled",
+            Width = 90,
+            Height = 25
+        };
+        enabledModeButton.Click += (s, e) => ModeRequested?.Invoke(this, "enabled");
+        
+        var autoSwitchModeButton = new Button
+        {
+            Text = "Auto-Switch",
+            Width = 90,
+            Height = 25
+        };
+        autoSwitchModeButton.Click += (s, e) => ModeRequested?.Invoke(this, "auto-switch");
+        
+        var disabledModeButton = new Button
+        {
+            Text = "Disabled",
+            Width = 90,
+            Height = 25
+        };
+        disabledModeButton.Click += (s, e) => ModeRequested?.Invoke(this, "disabled");
+
         closeButton = new Button
         {
             Text = "Close",
@@ -147,6 +181,10 @@ public partial class StatusWindow : Form
 
         buttonPanel.Controls.Add(closeButton);
         buttonPanel.Controls.Add(toggleButton);
+        buttonPanel.Controls.Add(disabledModeButton);
+        buttonPanel.Controls.Add(autoSwitchModeButton);
+        buttonPanel.Controls.Add(enabledModeButton);
+        buttonPanel.Controls.Add(modeLabel);
 
         mainPanel.Controls.Add(buttonPanel, 0, 5);
         mainPanel.SetColumnSpan(buttonPanel, 2);
