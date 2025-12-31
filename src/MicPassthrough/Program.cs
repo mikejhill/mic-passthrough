@@ -412,9 +412,11 @@ class Program
                 // If switching away from auto-switch, stop the monitor
                 else if (currentMode != "auto-switch" && monitorCts != null)
                 {
+                    logger.LogDebug("Stopping auto-switch monitor");
                     monitorCts.Cancel();
-                    monitorCts.Dispose();
+                    System.Threading.Thread.Sleep(100);  // Give monitor thread time to exit
                     audioMonitor = null;
+                    monitorCts.Dispose();
                     monitorCts = null;
                     statusWindow.AddLog("Auto-switch monitor stopped");
                 }
@@ -475,6 +477,13 @@ class Program
                         {
                             try
                             {
+                                // Check if monitor was nulled out by mode switching
+                                if (audioMonitor == null)
+                                {
+                                    logger.LogDebug("Auto-switch monitor nulled, exiting thread");
+                                    break;
+                                }
+                                
                                 bool isInUse = audioMonitor.IsDeviceInUse;
                                 
                                 // Only auto-start if it just became in-use (rising edge detection)
