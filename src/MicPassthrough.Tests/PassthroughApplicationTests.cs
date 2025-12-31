@@ -97,7 +97,7 @@ namespace MicPassthrough.Tests
             var options = new Options
             {
                 Mic = "CABLE Output (VB-Audio Virtual Cable)",
-                Cable = "CABLE Input (VB-Audio Virtual Cable)",
+                CableRender = "CABLE Input (VB-Audio Virtual Cable)",
                 ExclusiveMode = true,
                 Buffer = 100,
                 Verbose = true
@@ -150,7 +150,7 @@ namespace MicPassthrough.Tests
             var options = new Options
             {
                 Mic = "CABLE Output (VB-Audio Virtual Cable)",
-                Cable = "CABLE Input (VB-Audio Virtual Cable)",
+                CableRender = "CABLE Input (VB-Audio Virtual Cable)",
                 ExclusiveMode = true,
                 Buffer = 100,
                 PrebufferFrames = 3,
