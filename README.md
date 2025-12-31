@@ -2,6 +2,8 @@
 
 ![Microphone Passthrough Logo](docs/assets/logo.png)
 
+*Application Icon: [docs/assets/icon.png](docs/assets/icon.png)*
+
 A low-latency audio passthrough application that routes a microphone's audio to [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) using Windows WASAPI audio APIs.
 
 > [!NOTE]
