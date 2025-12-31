@@ -6,6 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
 
+    <!-- Application Icon -->
+    <ApplicationIcon>../../docs/assets/icon.ico</ApplicationIcon>
+
     <!-- Assembly Information -->
     <AssemblyName>MicPassthrough</AssemblyName>
     <Product>Microphone Passthrough</Product>
