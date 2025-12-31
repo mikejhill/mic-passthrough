@@ -14,7 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - N/A
 
 ### Changed
-- N/A
+- **CI/CD Performance Improvements**: Optimized GitHub Actions workflows with NuGet package caching
+  - Added NuGet package caching to both CI and release workflows (hash-based on `**/*.csproj`)
+  - Reduces dependency restore time from ~14s to ~1-2s on subsequent runs
+  - Expected overall improvement: CI from 2m 10s → ~1m 55s, releases by ~12-14s
+  - Cache automatically invalidates when project dependencies change (safe strategy)
+- **Enhanced Release Workflow**: Added test result publishing to release workflow
+  - Release workflow now generates and publishes test results (TRX and JUnit XML formats)
+  - Uses same EnricoMi action as CI workflow for consistent test reporting
+  - Provides release quality visibility - test results visible on release tag page
 
 ## [0.1.1] - 2025-12-31
 
