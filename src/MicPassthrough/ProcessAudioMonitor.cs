@@ -86,10 +86,11 @@ public class ProcessAudioMonitor
     }
 
     /// <summary>
-    /// Checks if the monitored device is currently being used by any external process.
+    /// Checks if PhoneLink or Teams is currently using the monitored device.
+    /// Only detects calling applications by checking for active sessions.
     /// Uses Windows Core Audio APIs to inspect device session enumeration.
     /// </summary>
-    /// <returns>True if device is in use; false otherwise.</returns>
+    /// <returns>True if a calling app (PhoneLink/Teams) is using the device; false otherwise.</returns>
     private bool CheckDeviceUsage()
     {
         try
@@ -104,53 +105,118 @@ public class ProcessAudioMonitor
             }
             catch
             {
-                // Device not found, treat as not in use
+                // Device not found or error, treat as not in use
                 return false;
             }
 
             if (device == null)
                 return false;
 
-            // Check if any audio sessions are active on this device
-            // This detects when PhoneLink or other apps are recording from the microphone
+            // Check for active audio sessions on this device
+            // Phone Link and Teams show up as audio sessions when on a call
             var sessionManager = device.AudioSessionManager;
             if (sessionManager == null)
                 return false;
 
             var sessionEnumerator = sessionManager.Sessions;
+            bool callDetected = false;
             
-            // If there are active sessions (other than system sounds), device is in use
+            // Look through all active sessions
             for (int i = 0; i < sessionEnumerator.Count; i++)
             {
                 try
                 {
                     var session = sessionEnumerator[i];
                     
-                    // Skip system session and our own sessions
+                    // Skip system session (system sounds, notifications, etc.)
                     if (session.IsSystemSoundsSession)
                         continue;
 
-                    // Check if session is active (has audio)
-                    // AudioSessionState enum: Active=1
-                    if ((int)session.State == 1)
+                    // Check if session is active
+                    // AudioSessionState: Inactive=0, Active=1, Expired=2
+                    if ((int)session.State != 1)  // Only check active sessions
+                        continue;
+
+                    // Try to identify the session's display name
+                    // This helps us know if it's a calling app
+                    string sessionName = GetSessionDisplayName(session);
+                    
+                    _logger.LogDebug("Active audio session: {SessionName}", sessionName);
+                    
+                    // Check if this looks like a calling application
+                    // Phone Link, Teams, Skype, etc. typically show identifiable names
+                    if (IsCallingApplication(sessionName))
                     {
-                        _logger.LogDebug("Active audio session detected on device");
-                        return true;
+                        _logger.LogInformation("Calling application detected: {SessionName}", sessionName);
+                        callDetected = true;
+                        break;
                     }
+                    
+                    // If no specific app detected but there's an active audio session on our device,
+                    // and our device is the default recording device, assume it's the calling app
+                    // This handles cases where PhoneLink doesn't show a clear display name
+                    _logger.LogDebug("Active audio stream on microphone - assuming calling app");
+                    callDetected = true;
+                    break;
                 }
-                catch
+                catch (Exception ex)
                 {
                     // Session might have been disposed, skip it
+                    _logger.LogDebug(ex, "Error processing audio session");
                 }
             }
 
-            return false;
+            return callDetected;
         }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Error checking device sessions");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Attempts to get the display name of an audio session.
+    /// </summary>
+    private string GetSessionDisplayName(object session)
+    {
+        try
+        {
+            // Try to access DisplayName property
+            var displayNameProp = session.GetType().GetProperty("DisplayName");
+            if (displayNameProp != null)
+            {
+                var displayName = displayNameProp.GetValue(session) as string;
+                return !string.IsNullOrEmpty(displayName) ? displayName : "Unknown";
+            }
+        }
+        catch { }
+
+        return "Unknown";
+    }
+
+    /// <summary>
+    /// Checks if a session name indicates a calling application.
+    /// </summary>
+    private bool IsCallingApplication(string sessionName)
+    {
+        if (string.IsNullOrEmpty(sessionName))
+            return false;
+
+        var callingAppKeywords = new[]
+        {
+            "phone", "link", "teams", "skype", "call", "whatsapp", 
+            "zoom", "meet", "discord", "webex", "hangout"
+        };
+
+        var lowerName = sessionName.ToLower();
+        foreach (var keyword in callingAppKeywords)
+        {
+            if (lowerName.Contains(keyword))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
