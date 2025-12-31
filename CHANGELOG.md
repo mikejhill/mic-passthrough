@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - N/A
 
+## [0.1.3] - 2025-12-31
+
+### Fixed
+- Release workflow publish step failing with bundler errors
+  - Added `--runtime win-x64` to dotnet restore step to generate necessary NuGet assets for win-x64 target
+  - Removed `--no-build` from publish step to allow runtime-specific binary compilation
+  - Ensures self-contained single-file executable can be bundled correctly in release pipeline
+
 ## [0.1.2] - 2025-12-31
 
 ### Changed
