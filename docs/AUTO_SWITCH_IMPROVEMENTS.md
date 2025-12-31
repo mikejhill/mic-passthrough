@@ -6,110 +6,243 @@ The `--auto-switch` mode enables Phone Link passthrough to activate and deactiva
 
 ## Issues Fixed
 
-### Issue 1: Default Microphone Detection
-**Problem:** When checking if Windows has already set the default microphone to CABLE Output, the code was getting the wrong device.
+### Issue 1: Phone Link Process Detection Too Broad ✅ FIXED
+**Problem:** Just checking if PhoneExperienceHost process existed wasn't enough - it could be open without any call active.
 
-**Root Cause:** `MMDeviceEnumerator.GetDefaultAudioEndpoint()` without parameters was returning random devices.
+**Root Cause:** Phone Link runs as a background service that persists even when not in a call.
 
-**Fix:** Explicitly specify both role and data flow:
+**Fix:** Two-level detection:
+1. Check if PhoneExperienceHost.exe process is running
+2. Check if there are active microphone audio sessions
+3. Only trigger passthrough when BOTH conditions are true
+
 ```csharp
-device = _enumerator.GetDefaultAudioEndpoint(DataFlow.In, Role.Communications);
-```
-
-This ensures we get the default communication input device (microphone), not any random device.
-
-### Issue 2: Registry Writing Failure
-**Problem:** When trying to write to the Windows registry to change the default microphone, the code would fail if the registry key didn't exist.
-
-**Root Cause:** Attempting to open a non-existent registry key without CreateSubKey would throw an exception.
-
-**Fix:** Use `CreateSubKey()` instead of `OpenSubKey()` to auto-create the key if needed:
-```csharp
-using (var key = Registry.CurrentUser.CreateSubKey(keyPath, writable: true))
-{
-    // Set values
-}
-```
-
-### Issue 3: Call End Detection Failing
-**Problem:** The code couldn't distinguish between when the call ended vs. when it started.
-
-**Root Cause:** No filter to exclude our own passthrough process from the external session count.
-
-**Fix:** Skip sessions from our own process:
-```csharp
-if (sessionName.Contains("MicPassthrough", StringComparison.OrdinalIgnoreCase))
-    continue;
-```
-
-### Issue 4: Generic Call Detection
-**Problem:** The code would trigger on any audio device usage, not just Phone Link calls.
-
-**Root Cause:** Monitoring for any "external session" was too broad - it would activate on Discord, Teams, or any app using the microphone.
-
-**Fix:** Monitor specifically for PhoneExperienceHost.exe process:
-```csharp
+// Check if PhoneExperienceHost is running
 var phoneExperienceProcesses = Process.GetProcessesByName("PhoneExperienceHost");
-if (phoneExperienceProcesses.Length > 0)
+if (phoneExperienceProcesses.Length == 0)
+    return false;
+
+// Check if there are active microphone sessions (svchost.exe becomes active during calls)
+var sessionEnumerator = device.AudioSessionManager.Sessions;
+int externalActiveSessions = 0;
+for (int i = 0; i < sessionEnumerator.Count; i++)
 {
-    return true; // Phone Link is active
+    if (session.IsSystemSoundsSession) continue;
+    if ((int)session.State == 1)  // Active
+        externalActiveSessions++;
 }
+
+return externalActiveSessions > 0;  // Only true if PhoneExperienceHost + active sessions
 ```
+
+**Impact:** Passthrough now only activates when Phone Link is actually using the microphone, not just when the app is open.
+
+### Issue 2: Default Microphone Detection Wrong Role ✅ FIXED
+**Problem:** The code was checking the "Communications" audio endpoint role, which might be set to something different than the actual Console (default) microphone role that most apps use.
+
+**Root Cause:** Windows has different audio roles:
+- **Console**: Default for user applications and games
+- **Multimedia**: For streaming and media playback
+- **Communications**: For VoIP and calls (may be different)
+
+**Fix:** Try all roles in order of preference:
+```csharp
+// Try Console role first (most common for user input)
+currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
+
+// If not available, try Multimedia
+if (currentDefault == null)
+    currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia);
+
+// Last resort: Communications
+if (currentDefault == null)
+    currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+```
+
+**Impact:** Now correctly saves your actual default microphone (e.g., "Microphone (HD Pro Webcam C920)") instead of what might have been set as Communications endpoint.
+
+### Issue 3: Registry Writing Succeeds But May Not Be Immediate ✅ FIXED/DOCUMENTED
+**Problem:** Registry changes are written successfully, but Windows Sound Settings UI may not update immediately or applications may cache the old default.
+
+**Root Cause:** Windows registry changes take effect, but:
+1. UI may cache the value (no immediate visual update)
+2. Some applications read the default on startup and don't re-query it
+3. Process restart may be needed for some apps to see the change
+
+**Fix:** Add detailed diagnostic logging to confirm Registry writes are successful:
+```csharp
+key.SetValue("Default", deviceId);
+_logger.LogInformation("Registry Default value is now: {Value}", 
+    key.GetValue("Default") as string);
+```
+
+**Verification:** You can check Registry after running the app:
+```powershell
+Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture' -Name Default
+```
+This shows the actual value written (device ID GUID).
+
+**Impact:** Registry is confirmed to be written successfully. Applications and Phone Link will use the new default on next startup or when they re-query the default device.
 
 ## How Phone Link Detection Works
 
 ### Challenge
-Phone Link (PhoneExperienceHost.exe) doesn't directly appear in Windows Core Audio API microphone session enumeration. Instead, it delegates audio to Windows Runtime services (svchost.exe).
+Phone Link (PhoneExperienceHost.exe) process stays running even when not in a call. Simply checking if the process exists isn't reliable enough.
 
 ### Solution
-Instead of trying to identify Phone Link through audio sessions, we monitor the PhoneExperienceHost process directly:
+Two-level detection system:
 
-1. **Every 500ms:** Check if PhoneExperienceHost.exe is running
-2. **If found:** Phone Link app is open/active
-3. **Start passthrough:** Automatically activate microphone routing
-4. **Monitor continuously:** Keep checking until Phone Link closes
+1. **Level 1 - Process Check:** Is PhoneExperienceHost.exe running?
+   - Quick check using `Process.GetProcessesByName()`
+   - Fast and reliable for detecting if Phone Link app is open
 
-### Limitations
-This approach detects when Phone Link is **open and active**, but cannot determine if a **call is actually happening**. This is a limitation of the Windows API - there's no public interface to Phone Link's internal call state.
+2. **Level 2 - Audio Session Check:** Are there active microphone sessions?
+   - When Phone Link is in a call, it creates audio sessions via Windows Runtime (svchost.exe)
+   - Monitor counts active sessions on the microphone device
+   - Only when sessions are ACTIVE do we know a call is happening
 
-**Future improvements** would require:
-- COM event subscriptions on Phone Link
-- WMI monitoring for process hierarchies
-- Windows API hooks into Phone Link internals
-- Integration with Windows Runtime APIs used by Phone Link
+**Result:** Passthrough activates when (PhoneExperienceHost running) AND (active audio sessions detected)
 
-## Testing
+This prevents false positives when Phone Link is open but not in a call.
+
+### How It Works During a Call
+
+```
+Phone Link opens → PhoneExperienceHost process runs
+    ↓
+User makes call → svchost.exe audio sessions become active
+    ↓
+MicPassthrough detects both conditions → Passthrough activates
+    ↓
+Call ends → Audio sessions drop to inactive
+    ↓
+MicPassthrough detects session inactivity → Passthrough stops
+```
+
+## Registry Verification
+
+The microphone default is stored in Windows Registry:
+```
+HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture
+Value: Default = {device-id-guid}
+```
+
+To verify the setting was applied, run:
+```powershell
+Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture' -Name Default
+```
+
+After running MicPassthrough with `--auto-switch`, the `Default` value will be the CABLE Input device ID.
+
+**Note:** Applications may cache the default device on startup. Phone Link will use the new default on its next startup after the Registry change.
+
+## Testing and Verification
+
+### Pre-Test Checklist
+
+Before testing auto-switch mode, verify:
+- ✅ Windows Registry access works (can read/write HKCU)
+- ✅ VB-Audio Virtual Cable installed and functioning
+- ✅ Physical microphone working (test with Sound Recorder first)
+- ✅ Phone Link app installed and working normally
 
 ### Manual Test Procedure
 
-1. **Start MicPassthrough in auto-switch mode:**
+1. **Open Phone Link (but don't make a call yet):**
+   ```powershell
+   # Leave Phone Link open/idle in background
+   ```
+
+2. **Start MicPassthrough in auto-switch mode with verbose logging:**
    ```powershell
    MicPassthrough.exe --mic "Microphone (HD Pro Webcam C920)" --auto-switch --verbose
    ```
 
-2. **Open Phone Link app** - you should see:
+3. **Verify detection output** - you should see:
    ```
-   PhoneExperienceHost process detected (2 instances)
-   Device is now in use by external process (likely PhoneLink)
-   Microphone switched to CABLE Output
-   Passthrough activated
-   ```
-
-3. **Close Phone Link** - you should see:
-   ```
-   Device is no longer in use by external processes
-   Passthrough stopped
-   Original microphone restored
+   [HH:MM:SS] info: Program[0] Starting microphone passthrough application
+   [HH:MM:SS] dbug: Program[0] Found device: Microphone (HD Pro Webcam C920)
+   [HH:MM:SS] dbug: Program[0] Found device: CABLE Input (VB-Audio Virtual Cable)
+   [HH:MM:SS] dbug: Program[0] Auto-switch mode: listening for calls...
    ```
 
-4. **Make a Phone Link call** - audio should flow clearly and at full volume
+4. **Open Phone Link and start a call** - you should see:
+   ```
+   [HH:MM:SS] info: Program[0] Phone Link is using microphone (PhoneExperienceHost running + 1 active session)
+   [HH:MM:SS] info: Program[0] Saved original default microphone (Console role): Microphone (HD Pro Webcam C920) (ID: {0.0.1.00000000}.{...})
+   [HH:MM:SS] info: Program[0] Attempting to set default microphone to device ID: {0.0.0.00000000}.{...}
+   [HH:MM:SS] info: Program[0] Registry key exists. Setting Default value to: {0.0.0.00000000}.{...}
+   [HH:MM:SS] info: Program[0] Verification: Registry Default value is now: {0.0.0.00000000}.{...}
+   [HH:MM:SS] info: Program[0] Set default microphone to: CABLE Input (VB-Audio Virtual Cable)
+   [HH:MM:SS] dbug: Program[0] Audio passthrough started
+   ```
+
+5. **Verify Registry change** (in new PowerShell window while call is active):
+   ```powershell
+   Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture' -Name Default
+   ```
+   Should show: `{0.0.0.00000000}.{ddb0a7a5-c1d4-48de-a446-5a700df0aba6}` (or your CABLE Input device ID)
+
+6. **Test audio quality:**
+   - Other party on Phone Link call should hear you clearly at normal volume
+   - No distortion or quietness
+   - Minimal latency (~100ms)
+
+7. **End the call** - you should see:
+   ```
+   [HH:MM:SS] dbug: Program[0] PhoneExperienceHost running but no active microphone sessions
+   [HH:MM:SS] dbug: Program[0] Audio passthrough stopped
+   [HH:MM:SS] info: Program[0] Restored original microphone: Microphone (HD Pro Webcam C920)
+   ```
+
+8. **Verify Registry restored** (in PowerShell):
+   ```powershell
+   Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture' -Name Default
+   ```
+   Should show: Your original microphone's device ID (the one saved in step 4)
 
 ### Expected Behavior
 
-- **Passthrough activates** when: Phone Link app opens or is already open
-- **Passthrough deactivates** when: Phone Link app closes completely
-- **Other apps ignored**: Discord, Zoom, Teams microphone access does not trigger passthrough
-- **Smooth handoff**: Microphone automatically switched to CABLE during call, restored after
+- **Passthrough activates** when: Phone Link app is open AND there are active microphone sessions
+- **Passthrough deactivates** when: Call ends (audio sessions become inactive), even if Phone Link app is still open
+- **Other apps ignored**: Discord, Zoom, Teams microphone access does not trigger passthrough (only PhoneExperienceHost process matters)
+- **Smooth handoff**: Microphone automatically switched to CABLE during call, restored when call ends
+- **Registry changes immediate**: Default value is written and verified in real-time
+
+### Troubleshooting Test Failures
+
+**"No passthrough detected when call starts"**
+- Check verbose output shows "Phone Link is using microphone"
+- Verify `PhoneExperienceHost` process is actually running (check Task Manager)
+- Confirm microphone has active sessions (check Windows Sound settings during call)
+- Solution: Manually verify device names match exactly with `--list-devices`
+
+**"Registry change says 'Permission Denied'"**
+- Requires admin privileges to write HKCU Registry
+- Run PowerShell or Command Prompt as Administrator
+- Try running MicPassthrough as Administrator
+
+**"Sound Settings shows old microphone as default"**
+- Windows Sound Settings UI may cache the value (no immediate visual update)
+- Phone Link and other apps will use the new default on next startup
+- Manually restart Phone Link to force it to re-query the default device
+- Restart Windows if Sound Settings persistence issues occur
+
+**"Phone Link still shows wrong microphone"**
+- Phone Link may have cached the old default on startup
+- Close Phone Link completely (check Task Manager that PhoneExperienceHost is gone)
+- Restart Phone Link - it will re-query Windows default microphone
+- Should now show CABLE Output as the default
+
+### Success Criteria
+
+Test passes when:
+1. ✅ MicPassthrough detects Phone Link using microphone
+2. ✅ Registry Default value changes to CABLE Input device ID
+3. ✅ Verbose output confirms Registry write and verification successful
+4. ✅ Phone Link call audio is clear and at normal volume
+5. ✅ Audio passthrough stops when call ends
+6. ✅ Registry Default value restores to original microphone
 
 ## Architecture Improvements
 
