@@ -71,7 +71,7 @@ namespace MicPassthrough.Tests
             Assert.NotEqual(0, exitCode);
         }
 
-        [Fact(Skip = "Requires VB-Audio Virtual Cable and full audio device setup - set RUN_HARDWARE_TESTS=1")]
+        [ConditionalHardwareTest("Requires VB-Audio Virtual Cable and full audio device setup - set RUN_HARDWARE_TESTS=1")]
         public void PassthroughApplication_CanInitializeWithValidDevices_Hardware()
         {
             // This integration test requires full system setup:
@@ -119,7 +119,7 @@ namespace MicPassthrough.Tests
             }
         }
 
-        [Fact(Skip = "Requires full audio device setup - set RUN_HARDWARE_TESTS=1")]
+        [ConditionalHardwareTest("Requires full audio device setup - set RUN_HARDWARE_TESTS=1")]
         public void PassthroughApplication_CanRouteAudio_Hardware()
         {
             // This is the most comprehensive integration test.

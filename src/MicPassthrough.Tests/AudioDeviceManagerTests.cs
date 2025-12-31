@@ -22,7 +22,7 @@ namespace MicPassthrough.Tests
             Assert.Equal("logger", ex.ParamName);
         }
 
-        [Fact(Skip = "Requires Windows audio device availability - set RUN_HARDWARE_TESTS=1")]
+        [ConditionalHardwareTest]
         public void AudioDeviceManager_CanInitialize_Hardware()
         {
             // This test requires actual Windows WASAPI and audio devices.
@@ -38,7 +38,7 @@ namespace MicPassthrough.Tests
             Assert.NotNull(manager);
         }
 
-        [Fact(Skip = "Requires Windows audio device availability - set RUN_HARDWARE_TESTS=1")]
+        [ConditionalHardwareTest]
         public void AudioDeviceManager_FindDevice_WithValidDevice_ReturnsDevice_Hardware()
         {
             // This test requires actual audio devices present on the system.
