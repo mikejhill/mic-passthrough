@@ -41,10 +41,10 @@ jobs:
       run: dotnet test --configuration Release --no-build --verbosity normal
 
     - name: Publish executable
-      # Self-contained single-file with compression
-      # Size: ~37MB (includes .NET runtime, no installation needed)
+      # Self-contained single-file with trimming and compression
+      # Size: ~12MB (includes .NET runtime, no installation needed)
       # Alternative: Framework-dependent (~1.6MB) requires users to install .NET 10.0
-      run: dotnet publish src/MicPassthrough/MicPassthrough.csproj --configuration Release --no-build --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true --output ./publish
+      run: dotnet publish src/MicPassthrough/MicPassthrough.csproj --configuration Release --no-build --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:EnableCompressionInSingleFile=true --output ./publish
       
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
@@ -53,24 +53,23 @@ jobs:
         body: |
           # Microphone Passthrough v${{ steps.version.outputs.VERSION }}
           
-          ## What's New
-          See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          Low-latency audio passthrough application that routes microphone input to VB-Audio Virtual Cable. Solves the Phone Link USB microphone volume bug on Windows 10/11.
           
           ## Installation
-          Download `MicPassthrough.exe` and run it from PowerShell:
+          1. Download `MicPassthrough.exe` below
+          2. Run from PowerShell or Command Prompt:
           ```powershell
-          .\MicPassthrough.exe --mic "Your Microphone Name" --cable "CABLE Input (VB-Audio Virtual Cable)"
+          .\MicPassthrough.exe --mic "Your Microphone Name"
           ```
           
-          Use `--help` to see all options or `--list-devices` to discover available audio devices.
+          Use `--list-devices` to see available audio devices, or `--help` for all options.
           
           ## Requirements
           - Windows 10/11
-          - [VB-Audio Virtual Cable](https://vb-audio.com/Cable/)
-          - .NET 10.0 Runtime (included in the executable)
+          - [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) (free download)
           
-          ## Changelog
-          See [releases page](https://github.com/${{ github.repository }}/releases) for all versions.
+          ## What's Changed
+          See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for the complete changelog.
         files: ./publish/MicPassthrough.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
