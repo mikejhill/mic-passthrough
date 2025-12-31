@@ -3,7 +3,7 @@ using CommandLine;
 /// <summary>
 /// Command-line options for the microphone passthrough application.
 /// </summary>
-class Options
+public class Options
 {
     /// <summary>
     /// Microphone device name (exact match). Use --list-devices to see available names.
