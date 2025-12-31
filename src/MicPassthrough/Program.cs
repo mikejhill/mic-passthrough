@@ -400,6 +400,9 @@ class Program
                         audioMonitor = new ProcessAudioMonitor(wrappedLogger, micDevice.ID, opts.CableCapture);
                         statusWindow.AddLog("Auto-switch monitor initialized");
                         
+                        // Start ProcessAudioMonitor's internal device usage monitoring thread
+                        _ = audioMonitor.StartMonitoringAsync(CancellationToken.None);
+                        
                         monitorThread = new Thread(() =>
                         {
                             bool lastDetectedInUse = false;
@@ -516,6 +519,9 @@ class Program
                     // Create monitor with device ID and cable capture device name
                     audioMonitor = new ProcessAudioMonitor(wrappedLogger, deviceId, opts.CableCapture);
                     statusWindow.AddLog("Auto-switch monitor initialized");
+                    
+                    // Start ProcessAudioMonitor's internal device usage monitoring thread
+                    _ = audioMonitor.StartMonitoringAsync(CancellationToken.None);
                     
                     // Start background monitoring thread
                     monitorThread = new Thread(() =>
