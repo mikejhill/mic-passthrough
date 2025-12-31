@@ -42,7 +42,7 @@ public partial class StatusWindow : Form
         var mainPanel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
+            ColumnCount = 1,
             RowCount = 6,
             Padding = new Padding(10),
             AutoSize = false,
@@ -60,10 +60,7 @@ public partial class StatusWindow : Form
         mainPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // Row 4 - expand
         mainPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));  // Row 5
 
-        mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));  // Column 0
-        mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));  // Column 1
-
-        // Status section
+        // Status section - use nested panel to keep labels together
         statusLabel = new Label
         {
             Text = "Passthrough Status:",
@@ -76,11 +73,20 @@ public partial class StatusWindow : Form
             Text = "Inactive",
             AutoSize = true,
             ForeColor = Color.Red,
-            Font = new Font(SystemFonts.DefaultFont.FontFamily, 12, FontStyle.Bold)
+            Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold)
         };
 
-        mainPanel.Controls.Add(statusLabel, 0, 0);
-        mainPanel.Controls.Add(statusValueLabel, 1, 0);
+        var statusPanel = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0),
+            Padding = new Padding(0)
+        };
+        statusPanel.Controls.Add(statusLabel);
+        statusPanel.Controls.Add(statusValueLabel);
+
+        mainPanel.Controls.Add(statusPanel, 0, 0);
 
         // Mic device
         micLabel = new Label
@@ -117,7 +123,6 @@ public partial class StatusWindow : Form
             Height = 200  // Take up remaining vertical space
         };
         mainPanel.Controls.Add(logBox, 0, 4);
-        mainPanel.SetColumnSpan(logBox, 2);
 
         // Buttons
         var buttonPanel = new FlowLayoutPanel
@@ -127,24 +132,8 @@ public partial class StatusWindow : Form
             FlowDirection = FlowDirection.RightToLeft,
             Padding = new Padding(10)
         };
-
-        // Mode label
-        var modeLabel = new Label
-        {
-            Text = "Mode:",
-            AutoSize = true,
-            Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold)
-        };
         
         // Mode buttons
-        var enabledModeButton = new Button
-        {
-            Text = "Enabled",
-            Width = 90,
-            Height = 25
-        };
-        enabledModeButton.Click += (s, e) => ModeRequested?.Invoke(this, "enabled");
-        
         var autoSwitchModeButton = new Button
         {
             Text = "Auto-Switch",
@@ -152,6 +141,14 @@ public partial class StatusWindow : Form
             Height = 25
         };
         autoSwitchModeButton.Click += (s, e) => ModeRequested?.Invoke(this, "auto-switch");
+        
+        var enabledModeButton = new Button
+        {
+            Text = "Enabled",
+            Width = 90,
+            Height = 25
+        };
+        enabledModeButton.Click += (s, e) => ModeRequested?.Invoke(this, "enabled");
         
         var disabledModeButton = new Button
         {
@@ -164,19 +161,17 @@ public partial class StatusWindow : Form
         closeButton = new Button
         {
             Text = "Close",
-            Width = 100,
-            Height = 30
+            Width = 90,
+            Height = 25
         };
         closeButton.Click += (s, e) => this.Close();
 
         buttonPanel.Controls.Add(closeButton);
         buttonPanel.Controls.Add(disabledModeButton);
-        buttonPanel.Controls.Add(autoSwitchModeButton);
         buttonPanel.Controls.Add(enabledModeButton);
-        buttonPanel.Controls.Add(modeLabel);
+        buttonPanel.Controls.Add(autoSwitchModeButton);
 
         mainPanel.Controls.Add(buttonPanel, 0, 5);
-        mainPanel.SetColumnSpan(buttonPanel, 2);
 
         this.Controls.Add(mainPanel);
     }

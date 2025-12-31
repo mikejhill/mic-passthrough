@@ -45,14 +45,9 @@ public class SystemTrayUI : IDisposable
     public Action DoubleClickAction { get; set; }
 
     /// <summary>
-    /// Occurs when user clicks "Start Passthrough" menu item.
+    /// Occurs when user selects a mode from the tray menu.
     /// </summary>
-    public event EventHandler StartRequested;
-
-    /// <summary>
-    /// Occurs when user clicks "Stop Passthrough" menu item.
-    /// </summary>
-    public event EventHandler StopRequested;
+    public event EventHandler<string> ModeRequested;
 
     /// <summary>
     /// Occurs when user clicks "Exit" menu item.
@@ -70,8 +65,9 @@ public class SystemTrayUI : IDisposable
 
         // Create context menu
         _contextMenu = new ContextMenuStrip();
-        _contextMenu.Items.Add("Start Passthrough", null, OnStartClick);
-        _contextMenu.Items.Add("Stop Passthrough", null, OnStopClick);
+        _contextMenu.Items.Add("Enabled", null, (s, e) => OnModeClick("enabled"));
+        _contextMenu.Items.Add("Auto-Switch", null, (s, e) => OnModeClick("auto-switch"));
+        _contextMenu.Items.Add("Disabled", null, (s, e) => OnModeClick("disabled"));
         _contextMenu.Items.Add("-"); // Separator
         _contextMenu.Items.Add("Exit", null, OnExitClick);
 
@@ -117,13 +113,6 @@ public class SystemTrayUI : IDisposable
             tooltip += $"\nCable: {CableDevice}";
 
         _trayIcon.Text = tooltip.Length <= 63 ? tooltip : tooltip.Substring(0, 60) + "...";
-
-        // Update menu items
-        if (_contextMenu.Items.Count >= 2)
-        {
-            ((ToolStripItem)_contextMenu.Items[0]).Enabled = !_isPassthroughActive;
-            ((ToolStripItem)_contextMenu.Items[1]).Enabled = _isPassthroughActive;
-        }
 
         _logger.LogDebug("Tray icon updated: {Status}", status);
     }
@@ -180,20 +169,10 @@ public class SystemTrayUI : IDisposable
         }
     }
 
-    private void OnStartClick(object sender, EventArgs e)
+    private void OnModeClick(string mode)
     {
-        _logger.LogInformation("Start passthrough requested from tray menu");
-        StartRequested?.Invoke(this, EventArgs.Empty);
-        IsPassthroughActive = true;
-        ShowNotification("Microphone Passthrough", "Passthrough activated");
-    }
-
-    private void OnStopClick(object sender, EventArgs e)
-    {
-        _logger.LogInformation("Stop passthrough requested from tray menu");
-        StopRequested?.Invoke(this, EventArgs.Empty);
-        IsPassthroughActive = false;
-        ShowNotification("Microphone Passthrough", "Passthrough deactivated");
+        _logger.LogInformation("Mode '{Mode}' requested from tray menu", mode);
+        ModeRequested?.Invoke(this, mode);
     }
 
     private void OnExitClick(object sender, EventArgs e)

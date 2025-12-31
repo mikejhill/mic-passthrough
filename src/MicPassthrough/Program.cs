@@ -318,8 +318,19 @@ class Program
             System.Windows.Forms.Application.Exit();
         };
 
+        trayUI.ModeRequested += (s, mode) =>
+        {
+            HandleModeSwitch(mode);
+        };
+
         // Wire up status window mode switching
         statusWindow.ModeRequested += (s, mode) =>
+        {
+            HandleModeSwitch(mode);
+        };
+
+        // Helper method for mode switching logic
+        void HandleModeSwitch(string mode)
         {
             // Stop passthrough before switching modes
             if (isPassthroughActive)
@@ -487,7 +498,7 @@ class Program
                     }
                 }
             }
-        };
+        }
 
         // Wire up status window to show on tray double-click
         trayUI.DoubleClickAction = () =>
