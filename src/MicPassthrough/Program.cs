@@ -1,5 +1,6 @@
 ﻿using System.CommandLine;
 using Microsoft.Extensions.Logging;
+using NAudio.CoreAudioApi;
 
 /// <summary>
 /// Entry point for the microphone passthrough application.
@@ -153,6 +154,7 @@ class Program
 
     /// <summary>
     /// Runs the application in daemon mode with system tray indicator and status window.
+    /// Supports auto-switch mode for automatic passthrough control based on call detection.
     /// </summary>
     static int RunDaemonMode(PassthroughApplication application, Options opts, ILogger logger)
     {
@@ -165,6 +167,10 @@ class Program
             logger.LogInformation("Use --list-devices to see available microphones");
             return 1;
         }
+
+        // Determine daemon mode based on options
+        string daemonMode = opts.AutoSwitch ? "auto-switch" : "enabled";  // Default to enabled if not auto-switch
+        logger.LogInformation("Daemon control mode: {Mode}", daemonMode);
 
         // Initialize system tray UI
         using var trayUI = new SystemTrayUI(logger);
@@ -183,6 +189,8 @@ class Program
         bool isPassthroughActive = false;
         PassthroughEngine engine = null;
         object engineLock = new object();
+        ProcessAudioMonitor audioMonitor = null;  // For auto-switch mode
+        CancellationTokenSource monitorCts = null;  // To stop monitor thread
 
         // Create a wrapper logger that also updates the status window
         var wrappedLogger = new DaemonLoggerWrapper(logger, (msg) =>
@@ -298,12 +306,80 @@ class Program
 
         // Show initial notification
         trayUI.ShowNotification("Microphone Passthrough",
-            $"Daemon started\nMic: {opts.Mic}\nCable: {opts.CableRender}");
+            $"Daemon started\nMode: {daemonMode}\nMic: {opts.Mic}");
         statusWindow.AddLog("Daemon mode started");
+        statusWindow.AddLog($"Mode: {daemonMode}");
         statusWindow.AddLog($"Microphone: {opts.Mic}");
         statusWindow.AddLog($"Cable: {opts.CableRender}");
+
+        // Start auto-switch monitor if in auto-switch mode
         if (opts.AutoSwitch)
-            statusWindow.AddLog("Auto-switch: Enabled (monitoring call detection)");
+        {
+            try
+            {
+                monitorCts = new CancellationTokenSource();
+                var deviceManager = new AudioDeviceManager(wrappedLogger);
+                
+                // Find the microphone device to get its ID for monitoring
+                try
+                {
+                    var micDevice = deviceManager.FindDevice(DataFlow.Capture, opts.Mic);
+                    string deviceId = micDevice.ID;
+                    
+                    // Create monitor with device ID and cable capture device name
+                    audioMonitor = new ProcessAudioMonitor(wrappedLogger, deviceId, opts.CableCapture);
+                    statusWindow.AddLog("Auto-switch monitor initialized");
+                    
+                    // Start background monitoring thread
+                    var monitorThread = new Thread(() =>
+                    {
+                        logger.LogDebug("Auto-switch monitor thread started");
+                        while (!monitorCts.Token.IsCancellationRequested)
+                        {
+                            try
+                            {
+                                bool isInUse = audioMonitor.IsDeviceInUse;
+                                
+                                // Start passthrough if device is in use and not already active
+                                if (isInUse && !isPassthroughActive)
+                                {
+                                    logger.LogInformation("Call detected by auto-switch monitor");
+                                    StartPassthrough();
+                                }
+                                // Stop passthrough if device is not in use and currently active
+                                else if (!isInUse && isPassthroughActive)
+                                {
+                                    logger.LogInformation("Call ended, stopping passthrough");
+                                    StopPassthrough();
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                logger.LogError(ex, "Error in auto-switch monitor");
+                            }
+                            
+                            // Check every 500ms
+                            System.Threading.Thread.Sleep(500);
+                        }
+                        logger.LogDebug("Auto-switch monitor thread exiting");
+                    })
+                    {
+                        IsBackground = true
+                    };
+                    monitorThread.Start();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Could not find microphone device for auto-switch");
+                    statusWindow.AddLog("WARNING: Could not initialize auto-switch - device not found");
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to initialize auto-switch monitor");
+                statusWindow.AddLog($"ERROR initializing auto-switch: {ex.Message}");
+            }
+        }
 
         logger.LogDebug("Running Windows Forms application loop for system tray");
 
@@ -313,6 +389,14 @@ class Program
         // Cleanup
         logger.LogInformation("Daemon mode exiting");
         StopPassthrough();
+        
+        // Stop auto-switch monitor if running
+        if (monitorCts != null)
+        {
+            monitorCts.Cancel();
+            monitorCts.Dispose();
+        }
+        
         statusWindow?.Dispose();
 
         return 0;

@@ -131,52 +131,46 @@ public class SystemTrayUI : IDisposable
     /// <summary>
     /// Loads the application icon from the project assets.
     /// Falls back to system icon if not found.
+    /// Supports multiple paths for dotnet run, published builds, and development scenarios.
     /// </summary>
     private Icon LoadApplicationIcon()
     {
         try
         {
-            string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
-            if (string.IsNullOrEmpty(exePath))
-            {
-                _logger.LogWarning("Could not determine executable path, using system icon");
-                return SystemIcons.Application;
-            }
-
-            var exeDir = Path.GetDirectoryName(exePath);
+            // Try multiple strategies to locate the icon
+            var searchPaths = new List<string>();
 
             // Strategy 1: Look in same directory as exe (published/release builds)
-            var iconPath = Path.Combine(exeDir, "icon.ico");
-            if (File.Exists(iconPath))
+            string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrEmpty(exePath))
             {
-                _logger.LogInformation("Loaded tray icon from exe directory: {IconPath}", iconPath);
-                return new Icon(iconPath);
+                var exeDir = Path.GetDirectoryName(exePath);
+                searchPaths.Add(Path.Combine(exeDir, "icon.ico"));
+                
+                // Strategy 2: From bin/Debug/net10.0-windows/ → docs/assets/ (for published builds)
+                searchPaths.Add(Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "docs", "assets", "icon.ico")));
+                
+                // Strategy 3: From src/MicPassthrough/bin/Debug/ → workspace/docs/assets/ (for builds with source structure)
+                searchPaths.Add(Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "..", "docs", "assets", "icon.ico")));
             }
 
-            // Strategy 2: Look in docs/assets relative to exe (development from bin/Debug)
-            // From bin/Debug/net10.0-windows/ go to ../../docs/assets/icon.ico
-            iconPath = Path.Combine(exeDir, "..", "..", "..", "docs", "assets", "icon.ico");
-            var fullPath = Path.GetFullPath(iconPath);
-            if (File.Exists(fullPath))
-            {
-                _logger.LogInformation("Loaded tray icon from development path: {IconPath}", fullPath);
-                return new Icon(fullPath);
-            }
+            // Strategy 4: From current working directory (for dotnet run scenarios)
+            searchPaths.Add(Path.GetFullPath("docs/assets/icon.ico"));
+            searchPaths.Add(Path.GetFullPath("../docs/assets/icon.ico"));
+            searchPaths.Add(Path.GetFullPath("../../docs/assets/icon.ico"));
+            searchPaths.Add(Path.GetFullPath("../../../docs/assets/icon.ico"));
 
-            // Strategy 3: Look relative to workspace root (from src/MicPassthrough/bin/Debug/)
-            iconPath = Path.Combine(exeDir, "..", "..", "..", "..", "docs", "assets", "icon.ico");
-            fullPath = Path.GetFullPath(iconPath);
-            if (File.Exists(fullPath))
+            foreach (var iconPath in searchPaths)
             {
-                _logger.LogInformation("Loaded tray icon from workspace path: {IconPath}", fullPath);
-                return new Icon(fullPath);
+                if (File.Exists(iconPath))
+                {
+                    _logger.LogInformation("Loaded tray icon from: {IconPath}", iconPath);
+                    return new Icon(iconPath);
+                }
             }
 
             _logger.LogWarning("Could not find icon.ico in any expected location, using system icon");
-            _logger.LogDebug("Searched paths: {Path1}, {Path2}, {Path3}", 
-                Path.Combine(exeDir, "icon.ico"),
-                Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "docs", "assets", "icon.ico")),
-                Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "..", "docs", "assets", "icon.ico")));
+            _logger.LogDebug("Searched {Count} paths for icon.ico", searchPaths.Count);
             return SystemIcons.Application;
         }
         catch (Exception ex)

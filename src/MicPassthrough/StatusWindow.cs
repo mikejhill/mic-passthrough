@@ -98,10 +98,12 @@ public partial class StatusWindow : Form
             ReadOnly = true,
             ScrollBars = ScrollBars.Vertical,
             Dock = DockStyle.Fill,
-            Font = new Font("Courier New", 9)
+            Font = new Font("Courier New", 9),
+            Height = 200  // Take up remaining vertical space
         };
         mainPanel.Controls.Add(logBox, 0, 4);
         mainPanel.SetColumnSpan(logBox, 2);
+        mainPanel.RowStyles[4] = new RowStyle(SizeType.Percent, 100);  // Make log box expandable
 
         // Buttons
         var buttonPanel = new FlowLayoutPanel
