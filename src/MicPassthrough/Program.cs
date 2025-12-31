@@ -192,6 +192,7 @@ class Program
         object engineLock = new object();
         ProcessAudioMonitor audioMonitor = null;  // For auto-switch mode
         CancellationTokenSource monitorCts = null;  // To stop monitor thread
+        Thread monitorThread = null;  // Reference to monitor thread so we can join it
         WindowsDefaultMicrophoneManager micManager = null;  // For microphone switching in enabled mode
 
         // Create a wrapper logger that also updates the status window
@@ -365,13 +366,20 @@ class Program
                 {
                     try
                     {
+                        // Wait for old monitor thread to exit before creating new one
+                        if (monitorThread != null && monitorThread.IsAlive)
+                        {
+                            logger.LogDebug("Waiting for old monitor thread to exit...");
+                            monitorThread.Join(1000);  // Wait up to 1 second
+                        }
+                        
                         monitorCts = new CancellationTokenSource();
                         var deviceManager = new AudioDeviceManager(wrappedLogger);
                         var micDevice = deviceManager.FindDevice(DataFlow.Capture, opts.Mic);
                         audioMonitor = new ProcessAudioMonitor(wrappedLogger, micDevice.ID, opts.CableCapture);
                         statusWindow.AddLog("Auto-switch monitor initialized");
                         
-                        var monitorThread = new Thread(() =>
+                        monitorThread = new Thread(() =>
                         {
                             bool lastDetectedInUse = false;
                             while (!monitorCts.Token.IsCancellationRequested)
@@ -414,10 +422,21 @@ class Program
                 {
                     logger.LogDebug("Stopping auto-switch monitor");
                     monitorCts.Cancel();
-                    System.Threading.Thread.Sleep(100);  // Give monitor thread time to exit
+                    
+                    // Wait for monitor thread to exit
+                    if (monitorThread != null && monitorThread.IsAlive)
+                    {
+                        logger.LogDebug("Waiting for monitor thread to exit...");
+                        if (!monitorThread.Join(1000))  // Wait up to 1 second
+                        {
+                            logger.LogWarning("Monitor thread did not exit in time");
+                        }
+                    }
+                    
                     audioMonitor = null;
                     monitorCts.Dispose();
                     monitorCts = null;
+                    monitorThread = null;
                     statusWindow.AddLog("Auto-switch monitor stopped");
                 }
             }
@@ -468,7 +487,7 @@ class Program
                     statusWindow.AddLog("Auto-switch monitor initialized");
                     
                     // Start background monitoring thread
-                    var monitorThread = new Thread(() =>
+                    monitorThread = new Thread(() =>
                     {
                         logger.LogDebug("Auto-switch monitor thread started");
                         bool lastDetectedInUse = false;  // Track previous state to detect changes
