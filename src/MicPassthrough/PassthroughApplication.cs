@@ -123,7 +123,12 @@ public class PassthroughApplication
             options.PrebufferFrames);
 
         var micDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Capture, options.Mic);
-        var monitor = new ProcessAudioMonitor(_logger, micDevice.ID);
+        var cableCaptureDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Capture, options.CableCapture);
+        
+        // Create monitor that checks BOTH the physical mic AND cable capture device
+        // This allows detecting if Phone Link switches between devices during the call handoff
+        string cableCaptureDeviceId = cableCaptureDevice?.ID ?? null;
+        var monitor = new ProcessAudioMonitor(_logger, micDevice.ID, cableCaptureDeviceId);
         var micManager = new WindowsDefaultMicrophoneManager(_logger);
         // CABLE Input is a Render device (output), not Capture
         var cableDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Render, options.CableRender);
