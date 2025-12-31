@@ -8,7 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- N/A
+- **Daemon mode with system tray UI** - Run passthrough in background with system tray indicator
+  - New `--daemon` / `-d` CLI option enables daemon mode
+  - System tray icon shows passthrough status (active/inactive)
+  - Right-click context menu for Start/Stop/Exit controls
+  - Tooltip displays microphone and cable device names
+  - Professional background service experience without Windows Service complexity
+  - See [ADR-0002](docs/adr/0002-daemon-mode-with-system-tray.md) for architecture details
 
 ### Fixed
 - N/A
