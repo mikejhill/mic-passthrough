@@ -187,10 +187,12 @@ class Program
 
         // Shared state for controlling passthrough
         bool isPassthroughActive = false;
+        bool autoSwitchStarted = false;  // Track if auto-switch started passthrough (vs. manual)
         PassthroughEngine engine = null;
         object engineLock = new object();
         ProcessAudioMonitor audioMonitor = null;  // For auto-switch mode
         CancellationTokenSource monitorCts = null;  // To stop monitor thread
+        WindowsDefaultMicrophoneManager micManager = null;  // For microphone switching in enabled mode
 
         // Create a wrapper logger that also updates the status window
         var wrappedLogger = new DaemonLoggerWrapper(logger, (msg) =>
@@ -199,7 +201,7 @@ class Program
         });
 
         // Helper function to start passthrough
-        void StartPassthrough()
+        void StartPassthrough(bool isAutoStarted = false)
         {
             lock (engineLock)
             {
@@ -219,7 +221,24 @@ class Program
                     engine.Initialize(opts.Mic, opts.CableRender, opts.Monitor, opts.EnableMonitor);
                     engine.Start();
 
+                    // In enabled mode (not auto-switch), set CABLE Output as default microphone
+                    // In auto-switch mode, WindowsDefaultMicrophoneManager handles this separately
+                    if (!opts.AutoSwitch && OperatingSystem.IsWindows())
+                    {
+                        try
+                        {
+                            micManager = new WindowsDefaultMicrophoneManager(wrappedLogger);
+                            micManager.SetDefaultMicrophone(opts.CableCapture);
+                            logger.LogInformation("Set default microphone to CABLE Output");
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning(ex, "Could not set default microphone (may require admin rights)");
+                        }
+                    }
+
                     isPassthroughActive = true;
+                    autoSwitchStarted = isAutoStarted;
                     trayUI.IsPassthroughActive = true;
                     statusWindow.SetStatus(true);
                     trayUI.ShowNotification("Microphone Passthrough", "Passthrough started");
@@ -230,6 +249,7 @@ class Program
                     logger.LogError(ex, "Failed to start passthrough engine");
                     statusWindow.AddLog($"ERROR: {ex.Message}");
                     isPassthroughActive = false;
+                    autoSwitchStarted = false;
                     trayUI.IsPassthroughActive = false;
                     statusWindow.SetStatus(false);
                     trayUI.ShowNotification("Microphone Passthrough", $"Failed to start: {ex.Message}");
@@ -255,7 +275,22 @@ class Program
                     engine.Dispose();
                     engine = null;
 
+                    // In enabled mode, restore original microphone
+                    if (!opts.AutoSwitch && micManager != null)
+                    {
+                        try
+                        {
+                            micManager.RestoreOriginalMicrophone();
+                            logger.LogInformation("Restored original microphone");
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning(ex, "Could not restore original microphone");
+                        }
+                    }
+
                     isPassthroughActive = false;
+                    autoSwitchStarted = false;
                     trayUI.IsPassthroughActive = false;
                     statusWindow.SetStatus(false);
                     trayUI.ShowNotification("Microphone Passthrough", "Passthrough stopped");
@@ -334,24 +369,28 @@ class Program
                     var monitorThread = new Thread(() =>
                     {
                         logger.LogDebug("Auto-switch monitor thread started");
+                        bool lastDetectedInUse = false;  // Track previous state to detect changes
+                        
                         while (!monitorCts.Token.IsCancellationRequested)
                         {
                             try
                             {
                                 bool isInUse = audioMonitor.IsDeviceInUse;
                                 
-                                // Start passthrough if device is in use and not already active
-                                if (isInUse && !isPassthroughActive)
+                                // Only auto-start if it just became in-use (rising edge detection)
+                                if (isInUse && !lastDetectedInUse && !isPassthroughActive)
                                 {
-                                    logger.LogInformation("Call detected by auto-switch monitor");
-                                    StartPassthrough();
+                                    logger.LogInformation("Call detected by auto-switch monitor (device in use)");
+                                    StartPassthrough(isAutoStarted: true);
                                 }
-                                // Stop passthrough if device is not in use and currently active
-                                else if (!isInUse && isPassthroughActive)
+                                // Only auto-stop if it just became not-in-use AND we auto-started it (falling edge detection)
+                                else if (!isInUse && lastDetectedInUse && isPassthroughActive && autoSwitchStarted)
                                 {
-                                    logger.LogInformation("Call ended, stopping passthrough");
+                                    logger.LogInformation("Call ended, stopping auto-started passthrough");
                                     StopPassthrough();
                                 }
+                                
+                                lastDetectedInUse = isInUse;
                             }
                             catch (Exception ex)
                             {
