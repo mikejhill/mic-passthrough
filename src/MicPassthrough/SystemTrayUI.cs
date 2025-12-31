@@ -1,6 +1,7 @@
 using System.Windows.Forms;
 using System.Drawing;
 using Microsoft.Extensions.Logging;
+using System.Reflection;
 
 /// <summary>
 /// System tray UI component for daemon mode.
@@ -16,7 +17,7 @@ public class SystemTrayUI : IDisposable
 
     /// <summary>
     /// Gets or sets whether passthrough is currently active.
-    /// Updates tray icon tooltip and menu state.
+    /// Updates tray icon and menu state.
     /// </summary>
     public bool IsPassthroughActive
     {
@@ -69,10 +70,10 @@ public class SystemTrayUI : IDisposable
         _contextMenu.Items.Add("-"); // Separator
         _contextMenu.Items.Add("Exit", null, OnExitClick);
 
-        // Create tray icon
+        // Create tray icon with application icon
         _trayIcon = new NotifyIcon
         {
-            Icon = CreateDefaultIcon(),
+            Icon = LoadApplicationIcon(),
             Text = "Microphone Passthrough",
             ContextMenuStrip = _contextMenu,
             Visible = true
@@ -123,34 +124,58 @@ public class SystemTrayUI : IDisposable
     }
 
     /// <summary>
-    /// Creates a simple default icon (colored circle) for the tray.
-    /// In production, this would use an embedded resource icon.
+    /// Loads the application icon from the project assets.
+    /// Falls back to system icon if not found.
     /// </summary>
-#pragma warning disable CA1416 // Validate platform compatibility - Daemon mode is Windows-only
-    private Icon CreateDefaultIcon()
+    private Icon LoadApplicationIcon()
     {
-        // Create a simple 16x16 icon using a Bitmap
-        var bitmap = new Bitmap(16, 16);
-        using (var graphics = Graphics.FromImage(bitmap))
+        try
         {
-            graphics.Clear(SystemColors.Control);
-            graphics.FillEllipse(Brushes.Green, 0, 0, 15, 15);
-            graphics.DrawEllipse(Pens.Black, 0, 0, 15, 15);
+            // Try to load the icon from the application directory
+            string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrEmpty(exePath))
+            {
+                var iconPath = Path.Combine(Path.GetDirectoryName(exePath), "icon.ico");
+                if (File.Exists(iconPath))
+                {
+                    _logger.LogDebug("Loaded tray icon from: {IconPath}", iconPath);
+                    return new Icon(iconPath);
+                }
+
+                // Try relative path for development
+                iconPath = Path.Combine(Path.GetDirectoryName(exePath), "../../docs/assets/icon.ico");
+                if (File.Exists(iconPath))
+                {
+                    _logger.LogDebug("Loaded tray icon from: {IconPath}", Path.GetFullPath(iconPath));
+                    return new Icon(iconPath);
+                }
+            }
+
+            // Fallback: use system application icon
+            _logger.LogWarning("Could not find application icon, using system icon");
+            return SystemIcons.Application;
         }
-        return Icon.FromHandle(bitmap.GetHicon());
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error loading application icon, using system icon");
+            return SystemIcons.Application;
+        }
     }
-#pragma warning restore CA1416
 
     private void OnStartClick(object sender, EventArgs e)
     {
         _logger.LogInformation("Start passthrough requested from tray menu");
         StartRequested?.Invoke(this, EventArgs.Empty);
+        IsPassthroughActive = true;
+        ShowNotification("Microphone Passthrough", "Passthrough activated");
     }
 
     private void OnStopClick(object sender, EventArgs e)
     {
         _logger.LogInformation("Stop passthrough requested from tray menu");
         StopRequested?.Invoke(this, EventArgs.Empty);
+        IsPassthroughActive = false;
+        ShowNotification("Microphone Passthrough", "Passthrough deactivated");
     }
 
     private void OnExitClick(object sender, EventArgs e)
@@ -161,11 +186,16 @@ public class SystemTrayUI : IDisposable
 
     private void OnTrayIconDoubleClick(object sender, EventArgs e)
     {
-        _logger.LogDebug("Tray icon double-clicked");
-        ShowNotification("Microphone Passthrough",
-            $"Status: {(_isPassthroughActive ? "Active" : "Inactive")}\n" +
-            $"Mic: {MicrophoneDevice ?? "Unknown"}\n" +
-            $"Cable: {CableDevice ?? "Unknown"}");
+        _logger.LogDebug("Tray icon double-clicked - toggling passthrough");
+        // Double-click toggles passthrough
+        if (_isPassthroughActive)
+        {
+            OnStopClick(null, EventArgs.Empty);
+        }
+        else
+        {
+            OnStartClick(null, EventArgs.Empty);
+        }
     }
 
     /// <summary>

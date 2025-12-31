@@ -160,28 +160,99 @@ class Program
 
         // Initialize system tray UI
         using var trayUI = new SystemTrayUI(logger);
-        trayUI.MicrophoneDevice = opts.Mic;
+        trayUI.MicrophoneDevice = opts.Mic ?? "Not specified";
         trayUI.CableDevice = opts.CableRender;
 
-        // Wire up tray UI events to control passthrough
+        // Create a flag to track daemon exit request
+        bool exitRequested = false;
+
+        // Wire up tray UI events
+        trayUI.StartRequested += (s, e) =>
+        {
+            logger.LogInformation("Tray: Start passthrough requested");
+            // For now, show notification that continuous passthrough starts
+            // In future, can implement dynamic passthrough start/stop
+            trayUI.IsPassthroughActive = true;
+        };
+
+        trayUI.StopRequested += (s, e) =>
+        {
+            logger.LogInformation("Tray: Stop passthrough requested");
+            trayUI.IsPassthroughActive = false;
+        };
+
+        trayUI.ExitRequested += (s, e) =>
+        {
+            logger.LogInformation("Tray: Exit requested");
+            exitRequested = true;
+            System.Windows.Forms.Application.Exit();
+        };
+
+        // Start passthrough in background thread
         var passthroughThread = new Thread(() =>
         {
             try
             {
-                application.Run(opts);
+                // Skip list-devices check - daemon always needs to run passthrough
+                if (string.IsNullOrEmpty(opts.Mic))
+                {
+                    logger.LogError("Daemon mode requires --mic to be specified");
+                    exitRequested = true;
+                    System.Windows.Forms.Application.Exit();
+                    return;
+                }
+
+                logger.LogInformation("Starting passthrough engine in background");
+                trayUI.IsPassthroughActive = true;
+                trayUI.ShowNotification("Microphone Passthrough", 
+                    $"Passthrough started\nMic: {opts.Mic}");
+
+                // Create and run the passthrough engine
+                var deviceManager = new AudioDeviceManager(logger);
+                var engine = new PassthroughEngine(logger, deviceManager,
+                    opts.Buffer, opts.ExclusiveMode, opts.PrebufferFrames);
+
+                try
+                {
+                    engine.Initialize(opts.Mic, opts.CableRender, opts.Monitor, opts.EnableMonitor);
+                    engine.Start();
+                    
+                    // Keep engine running until exit requested
+                    while (!exitRequested)
+                    {
+                        Thread.Sleep(100); // Check for exit every 100ms
+                    }
+                    
+                    engine.Stop();
+                    engine.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error in passthrough engine");
+                    trayUI.IsPassthroughActive = false;
+                    trayUI.ShowNotification("Microphone Passthrough", 
+                        $"Error: {ex.Message}");
+                }
+
+                logger.LogInformation("Passthrough engine stopped");
+                trayUI.IsPassthroughActive = false;
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Passthrough application failed");
+                logger.LogError(ex, "Passthrough thread failed");
             }
-        });
+        })
+        {
+            IsBackground = true  // Background thread won't prevent exit
+        };
         passthroughThread.Start();
 
         // Show initial notification
         trayUI.ShowNotification("Microphone Passthrough",
             $"Daemon started\nMic: {opts.Mic}\nCable: {opts.CableRender}");
 
-        // Keep the application alive while daemon is running
+        logger.LogDebug("Running Windows Forms application loop for system tray");
+        // Keep the application alive while daemon is running (WinForms message loop)
         System.Windows.Forms.Application.Run();
 
         logger.LogInformation("Daemon mode exiting");
