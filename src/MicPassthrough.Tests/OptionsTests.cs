@@ -1,68 +1,62 @@
-using CommandLine;
 using Xunit;
 
 namespace MicPassthrough.Tests
 {
+    /// <summary>
+    /// Tests for Options class structure and default values.
+    /// Command-line parsing is now handled by System.CommandLine and tested via integration tests.
+    /// </summary>
     public class OptionsParsingTests
     {
         [Fact]
-        public void CommandLine_Help_Flag_ParsesSuccessfully()
+        public void Options_Constructor_SetsCorrectDefaults()
         {
-            string[] args = new[] { "--help" };
-            var result = Parser.Default.ParseArguments<Options>(args);
+            var options = new Options();
 
-            // Help flag should be recognized and parsing should complete
-            Assert.NotNull(result);
+            Assert.Equal("CABLE Input (VB-Audio Virtual Cable)", options.CableRender);
+            Assert.Equal("CABLE Output (VB-Audio Virtual Cable)", options.CableCapture);
+            Assert.Equal(100, options.Buffer);
+            Assert.True(options.ExclusiveMode);
+            Assert.Equal(3, options.PrebufferFrames);
+            Assert.False(options.EnableMonitor);
+            Assert.False(options.ListDevices);
+            Assert.False(options.Verbose);
+            Assert.False(options.AutoSwitch);
         }
 
         [Fact]
-        public void CommandLine_Version_Flag_ParsesSuccessfully()
+        public void Options_CanSetMicrophone()
         {
-            string[] args = new[] { "--version" };
-            var result = Parser.Default.ParseArguments<Options>(args);
-
-            Assert.NotNull(result);
+            var options = new Options { Mic = "Test Microphone" };
+            Assert.Equal("Test Microphone", options.Mic);
         }
 
         [Fact]
-        public void CommandLine_ListDevices_Flag_ParsesSuccessfully()
+        public void Options_CanSetCableRender()
         {
-            string[] args = new[] { "--list-devices" };
-            var result = Parser.Default.ParseArguments<Options>(args);
-
-            Assert.NotNull(result);
+            var options = new Options { CableRender = "Custom Cable" };
+            Assert.Equal("Custom Cable", options.CableRender);
         }
 
         [Fact]
-        public void CommandLine_WithMicrophoneArgument_ParsesSuccessfully()
+        public void Options_CanSetCableCapture()
         {
-            string[] args = new[] { "--mic", "Test Microphone" };
-            var result = Parser.Default.ParseArguments<Options>(args);
-
-            Assert.NotNull(result);
+            var options = new Options { CableCapture = "Custom Capture" };
+            Assert.Equal("Custom Capture", options.CableCapture);
         }
 
         [Fact]
-        public void CommandLine_WithMultipleArguments_ParsesSuccessfully()
+        public void Options_CanSetBuffer()
         {
-            string[] args = new[]
-            {
-                "--mic", "Test Mic",
-                "--cable", "Test Cable",
-                "--buffer", "150"
-            };
-
-            var result = Parser.Default.ParseArguments<Options>(args);
-            Assert.NotNull(result);
+            var options = new Options { Buffer = 150 };
+            Assert.Equal(150, options.Buffer);
         }
 
         [Fact]
-        public void CommandLine_VerboseFlag_ParsesSuccessfully()
+        public void Options_CanSetVerbose()
         {
-            string[] args = new[] { "--verbose" };
-            var result = Parser.Default.ParseArguments<Options>(args);
-
-            Assert.NotNull(result);
+            var options = new Options { Verbose = true };
+            Assert.True(options.Verbose);
         }
     }
 }
