@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using NAudio.CoreAudioApi;
 using System;
 using System.Collections.Generic;
+using MicPassthrough;
 
 /// <summary>
 /// Manages switching Windows' default microphone device.
@@ -177,88 +178,45 @@ public class WindowsDefaultMicrophoneManager
     }
 
     /// <summary>
-    /// Sets a device as the Windows default using Registry settings.
-    /// This is the native Windows method for changing default audio devices.
-    /// Requires elevated privileges (Administrator).
+    /// Sets a device as the Windows default using IPolicyConfig COM interface.
+    /// This is the ONLY correct way to programmatically set Windows default devices.
+    /// Registry approach does NOT work - Windows ignores those values.
     /// </summary>
     private void SetDeviceAsDefault(string deviceId)
     {
-        // Windows stores default device settings in Registry under:
-        // HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture
-        // We set the Default value to the device ID
-        
+        if (!OperatingSystem.IsWindows())
+        {
+            _logger.LogWarning("Default microphone switching is only supported on Windows");
+            return;
+        }
+
+        _logger.LogInformation("Attempting to set default microphone to device ID: {DeviceId}", deviceId);
+
         try
         {
-            if (!OperatingSystem.IsWindows())
-            {
-                _logger.LogWarning("Default microphone switching is only supported on Windows");
-                return;
-            }
-
-            _logger.LogInformation("Attempting to set default microphone to device ID: {DeviceId}", deviceId);
-
-            // Registry path for capture device default
-            var registryPath = @"Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture";
+            // Set as default for Console role (most applications)
+            bool consoleSuccess = PolicyConfigClient.SetDefaultDevice(deviceId, ERole.eConsole);
             
-            try
+            // Set as default for Communications role (VoIP apps like Phone Link)
+            bool commSuccess = PolicyConfigClient.SetDefaultDevice(deviceId, ERole.eCommunications);
+            
+            // Set as default for Multimedia role (media playback apps)
+            bool multimediaSuccess = PolicyConfigClient.SetDefaultDevice(deviceId, ERole.eMultimedia);
+
+            if (consoleSuccess || commSuccess || multimediaSuccess)
             {
-                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(registryPath, writable: true))
-                {
-                    if (key == null)
-                    {
-                        _logger.LogWarning("Registry key not found at: {Path}", registryPath);
-                        _logger.LogInformation("Attempting to create Registry key...");
-                        
-                        try
-                        {
-                            using (var createdKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(registryPath))
-                            {
-                                if (createdKey == null)
-                                {
-                                    _logger.LogError("Failed to create Registry key - CreateSubKey returned null");
-                                    return;
-                                }
-                                
-                                createdKey.SetValue("Default", deviceId);
-                                _logger.LogInformation("Successfully created Registry key and set Default value to: {DeviceId}", deviceId);
-                                
-                                // Verify it was set
-                                var verifyValue = createdKey.GetValue("Default") as string;
-                                _logger.LogInformation("Verification: Registry Default value is now: {Value}", verifyValue ?? "(null)");
-                            }
-                        }
-                        catch (UnauthorizedAccessException ex)
-                        {
-                            _logger.LogError(ex, "Administrator privileges required to create Registry key. Please run as Administrator (UAC).");
-                            throw;
-                        }
-                    }
-                    else
-                    {
-                        // Set the default device value
-                        _logger.LogInformation("Registry key exists. Setting Default value to: {DeviceId}", deviceId);
-                        key.SetValue("Default", deviceId);
-                        
-                        // Verify it was set
-                        var verifyValue = key.GetValue("Default") as string;
-                        _logger.LogInformation("Verification: Registry Default value is now: {Value}", verifyValue ?? "(null)");
-                    }
-                }
+                _logger.LogInformation("Successfully set default microphone (Console: {Console}, Communications: {Comm}, Multimedia: {Multi})",
+                    consoleSuccess, commSuccess, multimediaSuccess);
             }
-            catch (UnauthorizedAccessException ex)
+            else
             {
-                _logger.LogError(ex, "Access denied when writing to Registry. Administrator privileges required.");
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error accessing Registry at path: {Path}", registryPath);
-                throw;
+                _logger.LogError("Failed to set default microphone for any role. COM interface may not be available.");
+                throw new InvalidOperationException("Failed to set default device via IPolicyConfig");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to set default device in Registry");
+            _logger.LogError(ex, "Failed to set default device via COM interface");
             throw;
         }
     }

@@ -208,9 +208,10 @@ dotnet test
    - **Version strategy:** [docs/VERSIONING.md](../docs/VERSIONING.md)
    - **GitHub Actions workflows:** [docs/WORKFLOWS.md](../docs/WORKFLOWS.md)
    - **Architecture & refactoring notes:** [docs/architecture/REFACTORING.md](../docs/architecture/REFACTORING.md)
-   - **Auto-switch mode improvements:** [docs/AUTO_SWITCH_IMPROVEMENTS.md](../docs/AUTO_SWITCH_IMPROVEMENTS.md)
+   - **Feature-specific documentation:** [docs/AUTO_SWITCH_IMPROVEMENTS.md](../docs/AUTO_SWITCH_IMPROVEMENTS.md), etc.
+   - **Implementation summaries:** [docs/IMPLEMENTATION_SUMMARY.md](../docs/IMPLEMENTATION_SUMMARY.md)
    
-   **Rule:** Feature-specific documentation goes in `docs/` folder with descriptive filename (e.g., `AUTO_SWITCH_IMPROVEMENTS.md`, `CALL_DETECTION.md`). Only root-level documentation goes directly in project root (README.md, LICENSE, CHANGELOG.md, TESTING.md).
+   **Rule:** Feature-specific documentation and implementation summaries go in `docs/` folder with descriptive filename. Only root-level documentation goes directly in project root (README.md, LICENSE, CHANGELOG.md, TESTING.md).
 
 ## Release & Versioning
 
@@ -422,8 +423,9 @@ PassthroughApplication orchestrates:
   - `SetDefaultMicrophone(deviceId)` - Saves original, switches to new device
   - `RestoreOriginalMicrophone()` - Restores original device
   - `GetDefaultMicrophone()` - Queries current default
-- **Implementation:** Windows Registry access (requires admin for write)
+- **Implementation:** Uses IPolicyConfig COM interface (ONLY correct way to set Windows defaults programmatically)
 - **Platform:** Windows only (checks `OperatingSystem.IsWindows()`)
+- **COM Interface:** PolicyConfigClient wraps IPolicyConfigVista for device management
 
 ### Auto-Switch Lifecycle
 
