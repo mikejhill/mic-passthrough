@@ -121,8 +121,9 @@ public bool Initialize(string deviceId)
 ### Test Files
 
 1. **OptionsParsingTests.cs** (6 tests)
-   - Validate CLI argument parsing with CommandLineParser
-   - Test all flags and options
+   - Validate Options class properties and default values
+   - Test property setters (Mic, CableRender, Buffer, Verbose, etc.)
+   - CLI parsing is now handled by System.CommandLine (tested via integration)
 
 2. **AudioDeviceManagerTests.cs** (3 tests)
    - Constructor validation (dependency injection)
@@ -162,7 +163,7 @@ dotnet test
 | Package | Version | Purpose |
 |---------|---------|---------|
 | NAudio | 2.2.1+ | WASAPI audio abstraction |
-| CommandLineParser | 2.9.1+ | CLI argument parsing |
+| System.CommandLine | 2.0.0-beta4+ | CLI argument parsing (trim-compatible) |
 | Microsoft.Extensions.Logging | 9.0.0+ | Structured logging |
 | Microsoft.Extensions.Logging.Console | 9.0.0+ | Console log output |
 
@@ -428,23 +429,26 @@ See [docs/QUICK_RELEASE.md](../docs/QUICK_RELEASE.md) for checklist.
 
 ### CLI Code
 
-- Use CommandLineParser for argument definitions
-- Add help text to all options
+- Use System.CommandLine for argument definitions
+- Add help text descriptions to all options
+- Configure aliases (short forms like -m, -c) for common options
 - Validate option combinations
 - **Configurable Properties with Sensible Defaults:**
   - Always provide reasonable defaults for user-configurable options
   - Defaults should work for the common case (typically VB-Audio Virtual Cable devices)
-  - Use `[Option]` attribute with `Default` parameter when defining CLI options
+  - Use `getDefaultValue: () => value` parameter when defining CLI options
   - Document what the default value is in help text and XML comments
   - Examples:
     ```csharp
-    [Option('c', "cable", Default = "CABLE Input (VB-Audio Virtual Cable)",
-        HelpText = "VB-Cable render device (exact match). Default: 'CABLE Input (VB-Audio Virtual Cable)'.")]
-    public string Cable { get; set; }
+    var cableRenderOption = new Option<string>(
+        aliases: new[] { "-c", "--cable-render" },
+        getDefaultValue: () => "CABLE Input (VB-Audio Virtual Cable)",
+        description: "VB-Cable render device name for audio output (exact match). Default: 'CABLE Input (VB-Audio Virtual Cable)'.");
     
-    [Option("cable-capture", Default = "CABLE Output (VB-Audio Virtual Cable)",
-        HelpText = "VB-Cable capture device (exact match). Default: 'CABLE Output (VB-Audio Virtual Cable)'.")]
-    public string CableCapture { get; set; }
+    var cableCaptureOption = new Option<string>(
+        aliases: new[] { "--cable-capture" },
+        getDefaultValue: () => "CABLE Output (VB-Audio Virtual Cable)",
+        description: "VB-Cable capture device name for default microphone (exact match). Default: 'CABLE Output (VB-Audio Virtual Cable)'.");
     ```
   - This approach allows users to override defaults without breaking existing usage
   - Users only need to specify options when their setup differs from defaults
