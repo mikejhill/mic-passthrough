@@ -209,9 +209,132 @@ dotnet test
    - **GitHub Actions workflows:** [docs/WORKFLOWS.md](../docs/WORKFLOWS.md)
    - **Architecture & refactoring notes:** [docs/architecture/REFACTORING.md](../docs/architecture/REFACTORING.md)
    - **Feature-specific documentation:** [docs/AUTO_SWITCH_IMPROVEMENTS.md](../docs/AUTO_SWITCH_IMPROVEMENTS.md), etc.
-   - **Implementation summaries:** [docs/IMPLEMENTATION_SUMMARY.md](../docs/IMPLEMENTATION_SUMMARY.md)
    
-   **Rule:** Feature-specific documentation and implementation summaries go in `docs/` folder with descriptive filename. Only root-level documentation goes directly in project root (README.md, LICENSE, CHANGELOG.md, TESTING.md).
+   **Rule:** Feature-specific documentation and permanent reference guides go in `docs/` folder with descriptive filenames. Only root-level documentation goes directly in project root (README.md, LICENSE, CHANGELOG.md, TESTING.md).
+
+   **Point-in-Time Documentation (Avoid):**
+   - Do NOT create session-based summary documents (e.g., IMPLEMENTATION_SUMMARY.md, CRITICAL_FIXES_SUMMARY.md)
+   - Point-in-time documentation becomes stale quickly and clutters the docs directory
+   - Instead, integrate findings into permanent documentation:
+     - Feature implementations → Feature-specific docs (e.g., AUTO_SWITCH_IMPROVEMENTS.md)
+     - Architecture decisions → [docs/architecture/REFACTORING.md](../docs/architecture/REFACTORING.md)
+     - Significant decisions → Architecture Decision Records in [docs/adr/](../docs/adr/)
+     - User-facing changes → [CHANGELOG.md](../CHANGELOG.md)
+
+## Git Commit Guidelines
+
+### Commit Granularity
+
+**Every commit must be isolated to a single logical change.** This ensures:
+- Clear git history for debugging and understanding changes
+- Easy rollback of specific features or fixes
+- Better code review experience
+- Clean separation of concerns
+
+### Commit Types and Examples
+
+**Feature Commit** - Single new feature or capability:
+```bash
+git commit -m "feat: Add auto-switch microphone detection
+
+- Implement ProcessAudioMonitor for call detection
+- Track audio sessions to identify Phone Link usage
+- Only trigger for PhoneExperienceHost, ignore other apps"
+```
+
+**Documentation Commit** - Updates to a single document or feature docs:
+```bash
+git commit -m "docs: Document auto-switch mode setup and testing
+
+- Add installation and configuration steps
+- Include troubleshooting section
+- Add expected log output examples"
+```
+
+**Bug Fix Commit** - Fix for a specific issue or behavior:
+```bash
+git commit -m "fix: Detect when Phone Link releases microphone
+
+- Track session history with HashSet comparison
+- Detect session end events
+- Properly deactivate passthrough when call ends"
+```
+
+**Refactoring Commit** - Code improvements without behavior change:
+```bash
+git commit -m "refactor: Simplify device enumeration logic
+
+- Extract common validation into helper method
+- Remove duplicate error handling
+- Improve readability without changing behavior"
+```
+
+**Chore Commit** - Build system, dependencies, maintenance:
+```bash
+git commit -m "chore: Update NAudio dependency to v2.2.1
+
+- Bump package version
+- Update build configuration
+- No code changes"
+```
+
+### What NOT to do
+
+❌ **Don't mix multiple features in one commit:**
+```bash
+# BAD: Too many unrelated changes
+git commit -m "Implement session tracking and add docs and clean up temp files"
+```
+
+❌ **Don't commit unrelated code and docs together:**
+```bash
+# BAD: Code feature + documentation + cleanup in one commit
+git commit -m "feat: Improve detection; docs: Update guide; chore: Remove temp files"
+```
+
+✅ **Do separate by logical change:**
+```bash
+git commit -m "feat: Implement session tracking"
+git commit -m "docs: Update auto-switch documentation"
+git commit -m "docs: Remove temporary summary files"
+```
+
+### Commit Message Format
+
+```
+<type>: <subject>
+
+<body>
+
+<footer>
+```
+
+- **Type:** feat, fix, docs, refactor, chore, test
+- **Subject:** Present tense, max 50 chars, lowercase
+- **Body:** Optional but recommended for complex changes
+  - Explain what and why, not how
+  - Wrap at 72 characters
+  - Separate from subject with blank line
+- **Footer:** Optional references to issues/tickets
+
+### Example Detailed Commit
+
+```bash
+git commit -m "fix: Handle audio device disconnection gracefully
+
+When a WASAPI device is disconnected during passthrough, the application
+would crash with an unhandled exception. This commit adds proper error
+handling to detect device removal and cleanly shut down the audio engine.
+
+Changes:
+- Add try-catch in audio capture loop
+- Log device disconnection events
+- Trigger graceful shutdown on error
+- Add device reconnection delay
+
+Fixes: #42
+Related-to: #38"
+```
 
 ## Release & Versioning
 
@@ -308,6 +431,25 @@ See [docs/QUICK_RELEASE.md](../docs/QUICK_RELEASE.md) for checklist.
 - Use CommandLineParser for argument definitions
 - Add help text to all options
 - Validate option combinations
+- **Configurable Properties with Sensible Defaults:**
+  - Always provide reasonable defaults for user-configurable options
+  - Defaults should work for the common case (typically VB-Audio Virtual Cable devices)
+  - Use `[Option]` attribute with `Default` parameter when defining CLI options
+  - Document what the default value is in help text and XML comments
+  - Examples:
+    ```csharp
+    [Option('c', "cable", Default = "CABLE Input (VB-Audio Virtual Cable)",
+        HelpText = "VB-Cable render device (exact match). Default: 'CABLE Input (VB-Audio Virtual Cable)'.")]
+    public string Cable { get; set; }
+    
+    [Option("cable-capture", Default = "CABLE Output (VB-Audio Virtual Cable)",
+        HelpText = "VB-Cable capture device (exact match). Default: 'CABLE Output (VB-Audio Virtual Cable)'.")]
+    public string CableCapture { get; set; }
+    ```
+  - This approach allows users to override defaults without breaking existing usage
+  - Users only need to specify options when their setup differs from defaults
+  - Keep option names short where possible (short flags like `-c`) for common options
+  - Use long-form names (`--cable-capture`) for less common options
 - Provide clear error messages for invalid input
 
 ### Test Code
@@ -340,6 +482,26 @@ The following files should be reviewed/updated when making relevant changes:
 | [docs/WORKFLOWS.md](../docs/WORKFLOWS.md) | GitHub Actions workflow changes |
 | [docs/architecture/REFACTORING.md](../docs/architecture/REFACTORING.md) | Architecture decisions, major refactoring |
 | [docs/adr/](../docs/adr/) | Significant technical decisions |
+| [docs/AUTO_SWITCH_IMPROVEMENTS.md](../docs/AUTO_SWITCH_IMPROVEMENTS.md) | Auto-switch feature changes and testing |
+
+## Documentation Anti-Patterns
+
+**Point-in-Time Documentation (Avoid Creating):**
+- Session-based summaries that document what was changed "today"
+- Implementation notes that document the development process
+- Fix summaries that track specific bug corrections
+
+**Why Avoid:**
+- These documents become outdated as soon as the next change is made
+- They duplicate information better captured in CHANGELOG.md and git history
+- They clutter the docs directory without providing lasting value
+- They create maintenance burden as the project evolves
+
+**Better Alternatives:**
+- Use [CHANGELOG.md](../CHANGELOG.md) for user-facing changes (what changed and why)
+- Use [docs/architecture/REFACTORING.md](../docs/architecture/REFACTORING.md) for significant code changes (why the change was necessary)
+- Use [docs/adr/](../docs/adr/) for major architectural decisions (context, decision, consequences)
+- Rely on git commit messages and pull request descriptions for development process history
 
 ## Performance Considerations
 
