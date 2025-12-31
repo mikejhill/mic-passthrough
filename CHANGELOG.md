@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - N/A
 
 ### Changed
+- N/A
+
+## [0.1.2] - 2025-12-31
+
+### Changed
 - **CI/CD Performance Improvements**: Optimized GitHub Actions workflows with NuGet package caching
   - Added NuGet package caching to both CI and release workflows (hash-based on `**/*.csproj`)
   - Reduces dependency restore time from ~14s to ~1-2s on subsequent runs
@@ -23,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Release workflow now generates and publishes test results (TRX and JUnit XML formats)
   - Uses same EnricoMi action as CI workflow for consistent test reporting
   - Provides release quality visibility - test results visible on release tag page
+- **Visual Assets**: Added project logo and application icon with multiple resolutions
+  - Logo embedded in README header for project branding
+  - Application icon integrated into executable (appears in File Explorer)
+  - Generated icon resolutions: 16×16, 32×32, 64×64, 128×128, 256×256
 
 ## [0.1.1] - 2025-12-31
 
