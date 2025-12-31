@@ -74,6 +74,11 @@ class Program
             getDefaultValue: () => false,
             description: "Enable automatic passthrough control and default microphone switching when calls are active. Requires --mic to be set.");
 
+        var daemonOption = new Option<bool>(
+            aliases: new[] { "-d", "--daemon" },
+            getDefaultValue: () => false,
+            description: "Run in daemon mode with system tray indicator. Application runs in background.");
+
         // Add all options to root command
         rootCommand.AddOption(micOption);
         rootCommand.AddOption(cableRenderOption);
@@ -86,6 +91,7 @@ class Program
         rootCommand.AddOption(listDevicesOption);
         rootCommand.AddOption(verboseOption);
         rootCommand.AddOption(autoSwitchOption);
+        rootCommand.AddOption(daemonOption);
 
         // Set the handler using context to access parsed values
         rootCommand.SetHandler(context =>
@@ -102,7 +108,8 @@ class Program
                 PrebufferFrames = context.ParseResult.GetValueForOption(prebufferFramesOption),
                 ListDevices = context.ParseResult.GetValueForOption(listDevicesOption),
                 Verbose = context.ParseResult.GetValueForOption(verboseOption),
-                AutoSwitch = context.ParseResult.GetValueForOption(autoSwitchOption)
+                AutoSwitch = context.ParseResult.GetValueForOption(autoSwitchOption),
+                Daemon = context.ParseResult.GetValueForOption(daemonOption)
             };
 
             context.ExitCode = RunApplication(options);
@@ -113,6 +120,7 @@ class Program
 
     /// <summary>
     /// Initializes the application framework and executes the passthrough application.
+    /// Supports both CLI mode and daemon mode with system tray.
     /// </summary>
     /// <param name="opts">Parsed command-line options.</param>
     /// <returns>Exit code (0 for success, non-zero for failure).</returns>
@@ -133,6 +141,50 @@ class Program
         var deviceManager = new AudioDeviceManager(logger);
         var application = new PassthroughApplication(logger, deviceManager);
 
-        return application.Run(opts);
+        if (opts.Daemon)
+        {
+            return RunDaemonMode(application, opts, logger);
+        }
+        else
+        {
+            return application.Run(opts);
+        }
+    }
+
+    /// <summary>
+    /// Runs the application in daemon mode with system tray indicator.
+    /// </summary>
+    static int RunDaemonMode(PassthroughApplication application, Options opts, ILogger logger)
+    {
+        logger.LogInformation("Starting in daemon mode");
+
+        // Initialize system tray UI
+        using var trayUI = new SystemTrayUI(logger);
+        trayUI.MicrophoneDevice = opts.Mic;
+        trayUI.CableDevice = opts.CableRender;
+
+        // Wire up tray UI events to control passthrough
+        var passthroughThread = new Thread(() =>
+        {
+            try
+            {
+                application.Run(opts);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Passthrough application failed");
+            }
+        });
+        passthroughThread.Start();
+
+        // Show initial notification
+        trayUI.ShowNotification("Microphone Passthrough",
+            $"Daemon started\nMic: {opts.Mic}\nCable: {opts.CableRender}");
+
+        // Keep the application alive while daemon is running
+        System.Windows.Forms.Application.Run();
+
+        logger.LogInformation("Daemon mode exiting");
+        return 0;
     }
 }

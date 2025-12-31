@@ -67,4 +67,11 @@ public class Options
     /// between the user's physical microphone and CABLE Output.
     /// </summary>
     public bool AutoSwitch { get; set; }
+
+    /// <summary>
+    /// Run in daemon mode with system tray indicator.
+    /// Application will run in the background, visible only in system tray.
+    /// Use right-click tray icon menu to control passthrough and exit.
+    /// </summary>
+    public bool Daemon { get; set; }
 }
