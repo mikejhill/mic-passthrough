@@ -473,12 +473,12 @@ class Program
                         logger.LogDebug("Auto-switch monitor thread started");
                         bool lastDetectedInUse = false;  // Track previous state to detect changes
                         
-                        while (!monitorCts.Token.IsCancellationRequested)
+                        while (monitorCts != null && !monitorCts.Token.IsCancellationRequested)
                         {
                             try
                             {
                                 // Check if monitor was nulled out by mode switching
-                                if (audioMonitor == null)
+                                if (audioMonitor == null || monitorCts == null)
                                 {
                                     logger.LogDebug("Auto-switch monitor nulled, exiting thread");
                                     break;
