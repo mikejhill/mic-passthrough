@@ -124,7 +124,8 @@ public class PassthroughApplication
         var micDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Capture, options.Mic);
         var monitor = new ProcessAudioMonitor(_logger, micDevice.ID);
         var micManager = new WindowsDefaultMicrophoneManager(_logger);
-        var cableDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Capture, options.Cable);
+        // CABLE Input is a Render device (output), not Capture
+        var cableDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Render, options.Cable);
 
         bool engineRunning = false;
 
