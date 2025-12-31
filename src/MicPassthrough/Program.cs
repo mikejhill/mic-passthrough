@@ -222,9 +222,8 @@ class Program
                     engine.Initialize(opts.Mic, opts.CableRender, opts.Monitor, opts.EnableMonitor);
                     engine.Start();
 
-                    // In enabled mode (not auto-switch), set CABLE Output as default microphone
-                    // In auto-switch mode, WindowsDefaultMicrophoneManager handles this separately
-                    if (!opts.AutoSwitch && OperatingSystem.IsWindows())
+                    // Set CABLE Output as default microphone (for both enabled and auto-switch modes)
+                    if (OperatingSystem.IsWindows())
                     {
                         try
                         {
@@ -278,8 +277,8 @@ class Program
                     engine.Dispose();
                     engine = null;
 
-                    // In enabled mode, restore original microphone
-                    if (!opts.AutoSwitch && micManager != null)
+                    // Restore original microphone if we switched it (both enabled and auto-switch modes)
+                    if (micManager != null && autoSwitchStarted)
                     {
                         try
                         {
