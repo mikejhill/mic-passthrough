@@ -8,20 +8,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- ProcessAudioMonitor for intelligent call detection
-- WindowsDefaultMicrophoneManager for automatic microphone device switching
-- `--auto-switch` CLI flag for automatic call-based passthrough activation
-- Audio device monitoring that detects when PhoneLink uses microphone
-- Automatic Windows default microphone switching to CABLE Output during calls
-- Automatic restoration of original microphone when call ends
-- Smart mode that only activates passthrough when needed
-- Real-time audio session detection (checks every 500ms)
+- N/A
 
 ### Fixed
 - N/A
 
 ### Changed
-- CLI help text updated with auto-switch examples and explanations
+- N/A
+
+## [0.1.0] - 2025-12-31
+
+### Added
+- **Auto-switch mode**: `--auto-switch` flag enables automatic passthrough control based on Phone Link call activity
+- **ProcessAudioMonitor**: Intelligent call detection engine that monitors audio sessions every 500ms
+- **WindowsDefaultMicrophoneManager**: COM-based Windows default microphone switching via IPolicyConfig
+- **Dual-device monitoring**: Monitors both physical microphone and cable capture device for reliable call detection
+- **Grace period framework**: Built-in (currently disabled) grace period for handling brief session interruptions
+- **Session filtering**: Only considers ACTIVE audio sessions (state == 1) for accurate call detection
+- **DisplayName-based identification**: Detects Phone Link via session DisplayName keywords ("phone", "call", "experience")
+- **Process ID tracking**: Identifies PhoneExperienceHost and related svchost.exe processes
+- **Session history tracking**: HashSet-based session comparison to detect call start/end events
+- **Automatic microphone restoration**: Saves and restores original default microphone when calls end
+- **New CLI options**:
+  - `--cable-render`: Specify VB-Audio render device (default: "CABLE Input (VB-Audio Virtual Cable)")
+  - `--cable-capture`: Specify VB-Audio capture device (default: "CABLE Output (VB-Audio Virtual Cable)")
+- **Comprehensive test suite**: 19 tests total (12 unit tests, 7 hardware integration tests)
+
+### Fixed
+- Call detection now differentiates Phone Link from other applications (Discord, Teams, etc.)
+- False hangup detection eliminated by monitoring both microphone devices
+- Session end detection improved with proper state tracking
+
+### Changed
+- Logging: Info-level logs now only show state changes (not repetitive checks every 500ms)
+- Debug logs remain verbose for troubleshooting
+- CLI option renamed from `--cable` to `--cable-render` for clarity
+- Help text expanded with auto-switch usage examples and explanations
+
+### Technical Details
+- Uses Windows Core Audio API session enumeration for call detection
+- COM interface IPolicyConfig for programmatic default device switching
+- WASAPI-based audio routing maintains ~100ms latency
+- Background monitoring thread with cancellation token support
 
 ## [1.0.0] - 2025-12-30
 
