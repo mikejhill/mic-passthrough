@@ -8,16 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial xUnit test suite with 11 unit tests
-- Conditional hardware integration tests
-- GitHub Actions CI/CD workflows
-- Comprehensive documentation and testing guides
+- ProcessAudioMonitor for intelligent call detection
+- WindowsDefaultMicrophoneManager for automatic microphone device switching
+- `--auto-switch` CLI flag for automatic call-based passthrough activation
+- Audio device monitoring that detects when PhoneLink uses microphone
+- Automatic Windows default microphone switching to CABLE Output during calls
+- Automatic restoration of original microphone when call ends
+- Smart mode that only activates passthrough when needed
+- Real-time audio session detection (checks every 500ms)
 
 ### Fixed
 - N/A
 
 ### Changed
-- N/A
+- CLI help text updated with auto-switch examples and explanations
 
 ## [1.0.0] - 2025-12-30
 

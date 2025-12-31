@@ -163,6 +163,17 @@ Route microphone to virtual cable:
     Enable detailed logging with timestamps showing device initialization,
     buffer status, and statistics every 100 frames.
 
+-a, --auto-switch
+    Enable automatic passthrough control and default microphone switching.
+    When enabled, MicPassthrough will:
+    - Monitor when PhoneLink (or other apps) start using your microphone
+    - Automatically start audio passthrough
+    - Automatically switch Windows default microphone to CABLE Output
+    - Stop passthrough and restore original microphone when the call ends
+    This prevents other applications from being affected when you're not on a call.
+    Requires administrator privileges for microphone switching.
+    [default: false]
+
 --help
     Display help screen.
 
@@ -178,7 +189,19 @@ Route microphone to virtual cable:
 ```
 Then open Phone Link - it will use CABLE Output (your routed microphone) and audio will be clear and full volume.
 
-**With monitoring enabled (hear yourself in speakers):**
+**Automatic smart mode (Phone Link only, runs in background):**
+```powershell
+.\src\MicPassthrough\bin\Debug\net10.0\MicPassthrough.exe --mic "Microphone (HD Pro Webcam C920)" --auto-switch
+```
+MicPassthrough will:
+1. Sit idle in the background until you start a Phone Link call
+2. Automatically detect the call and activate passthrough
+3. Automatically switch Windows default microphone to CABLE Output
+4. Monitor until the call ends, then stop passthrough and restore your microphone
+5. Return to idle, not affecting any other applications
+
+This is the recommended mode for minimal interference with your other applications.
+> **Note**: Requires administrator privileges (UAC prompt on Windows 10/11)**With monitoring enabled (hear yourself in speakers):**
 ```powershell
 .\src\MicPassthrough\bin\Debug\net10.0\MicPassthrough.exe --mic "Microphone (HD Pro Webcam C920)" --enable-monitor --monitor "Speakers (Realtek(R) Audio)"
 ```

@@ -27,6 +27,8 @@ MicPassthrough/
 │   │   ├── AudioDeviceManager.cs # Device enumeration & WASAPI setup
 │   │   ├── PassthroughApplication.cs # Core business logic
 │   │   ├── PassthroughEngine.cs # Low-level audio passthrough
+│   │   ├── ProcessAudioMonitor.cs # Call detection via audio sessions
+│   │   ├── WindowsDefaultMicrophoneManager.cs # Windows microphone switching
 │   │   └── MicPassthrough.csproj # Version source
 │   └── MicPassthrough.Tests/    # Test suite (15 tests)
 │       ├── OptionsParsingTests.cs # 6 CLI argument tests
@@ -360,6 +362,80 @@ The following files should be reviewed/updated when making relevant changes:
 - **Semantic Versioning:** https://semver.org/
 - **MADR (ADR Format):** https://adr.github.io/madr/
 - **VB-Audio Virtual Cable:** https://vb-audio.com/Cable/
+
+## Architecture
+
+### Components
+
+- **Program.cs** - Entry point, initializes logging and application framework
+- **Options.cs** - Command-line option definitions with validation
+- **PassthroughApplication.cs** - Main orchestrator, handles application lifecycle
+- **AudioDeviceManager.cs** - Audio device enumeration and discovery
+- **PassthroughEngine.cs** - Core audio processing, WASAPI integration
+- **ProcessAudioMonitor.cs** - Detects when external processes use audio device
+- **WindowsDefaultMicrophoneManager.cs** - Manages Windows default microphone settings
+
+### Continuous Mode (Default)
+
+```
+Microphone Device
+    ↓ (WASAPI Capture)
+PassthroughEngine
+    ↓ (Frame buffering)
+VB-Audio Cable Output
+    ↓
+PhoneLink (receives audio at full volume)
+```
+
+### Auto-Switch Mode (--auto-switch flag)
+
+```
+ProcessAudioMonitor (background, checks every 500ms)
+    ↓
+Detects PhoneLink using microphone
+    ↓
+PassthroughApplication orchestrates:
+    ├─ WindowsDefaultMicrophoneManager switches to CABLE
+    └─ PassthroughEngine starts passthrough
+         ↓
+    When call ends:
+    ├─ PassthroughEngine stops
+    └─ WindowsDefaultMicrophoneManager restores original
+```
+
+### ProcessAudioMonitor Details
+
+- **Purpose:** Detect when other applications actively use the microphone
+- **Method:** Monitors Windows Core Audio API session enumeration
+- **Frequency:** Checks every 500ms
+- **Usage:** `var monitor = new ProcessAudioMonitor(logger, deviceId);`
+- **State:** Check `monitor.IsDeviceInUse` property
+- **Lifecycle:** Runs on background thread, controlled via CancellationToken
+
+### WindowsDefaultMicrophoneManager Details
+
+- **Purpose:** Switch Windows default recording device
+- **Methods:**
+  - `SetDefaultMicrophone(deviceId)` - Saves original, switches to new device
+  - `RestoreOriginalMicrophone()` - Restores original device
+  - `GetDefaultMicrophone()` - Queries current default
+- **Implementation:** Windows Registry access (requires admin for write)
+- **Platform:** Windows only (checks `OperatingSystem.IsWindows()`)
+
+### Auto-Switch Lifecycle
+
+1. User runs: `MicPassthrough.exe --mic "MyMic" --auto-switch`
+2. ProcessAudioMonitor starts background monitoring thread
+3. When PhoneLink opens microphone:
+   - Monitor detects active audio session
+   - WindowsDefaultMicrophoneManager switches default to CABLE Output
+   - PassthroughEngine starts capturing and routing audio
+4. When PhoneLink closes microphone:
+   - Monitor detects session closed
+   - PassthroughEngine stops
+   - WindowsDefaultMicrophoneManager restores original microphone
+5. User presses ENTER to exit application
+6. All resources cleaned up, original microphone restored
 
 ## Notes for AI Contributors
 
