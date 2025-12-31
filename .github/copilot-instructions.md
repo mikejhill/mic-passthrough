@@ -208,6 +208,9 @@ dotnet test
    - **Version strategy:** [docs/VERSIONING.md](../docs/VERSIONING.md)
    - **GitHub Actions workflows:** [docs/WORKFLOWS.md](../docs/WORKFLOWS.md)
    - **Architecture & refactoring notes:** [docs/architecture/REFACTORING.md](../docs/architecture/REFACTORING.md)
+   - **Auto-switch mode improvements:** [docs/AUTO_SWITCH_IMPROVEMENTS.md](../docs/AUTO_SWITCH_IMPROVEMENTS.md)
+   
+   **Rule:** Feature-specific documentation goes in `docs/` folder with descriptive filename (e.g., `AUTO_SWITCH_IMPROVEMENTS.md`, `CALL_DETECTION.md`). Only root-level documentation goes directly in project root (README.md, LICENSE, CHANGELOG.md, TESTING.md).
 
 ## Release & Versioning
 

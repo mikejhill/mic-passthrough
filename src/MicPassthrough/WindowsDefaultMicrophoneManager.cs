@@ -34,17 +34,51 @@ public class WindowsDefaultMicrophoneManager
             var enumerator = new MMDeviceEnumerator();
             
             // Save the current Windows default microphone so we can restore it later
+            // Try different roles to find the actual default
             try
             {
-                var currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+                MMDevice currentDefault = null;
+                string foundVia = "";
+                
+                // Try Console role first (most common for user input devices)
+                try
+                {
+                    currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
+                    foundVia = "Console role";
+                }
+                catch { }
+                
+                // If Console role didn't work, try Multimedia
+                if (currentDefault == null)
+                {
+                    try
+                    {
+                        currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia);
+                        foundVia = "Multimedia role";
+                    }
+                    catch { }
+                }
+                
+                // Last resort: Communications role
+                if (currentDefault == null)
+                {
+                    try
+                    {
+                        currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+                        foundVia = "Communications role";
+                    }
+                    catch { }
+                }
+                
                 if (currentDefault != null)
                 {
                     _originalDefaultMicId = currentDefault.ID;
-                    _logger.LogInformation("Saved original default microphone: {Device}", currentDefault.FriendlyName);
+                    _logger.LogInformation("Saved original default microphone ({FoundVia}): {Device} (ID: {DeviceId})", 
+                        foundVia, currentDefault.FriendlyName, currentDefault.ID);
                 }
                 else
                 {
-                    _logger.LogWarning("Could not determine Windows default microphone");
+                    _logger.LogWarning("Could not determine Windows default microphone using any role");
                 }
             }
             catch (Exception ex)
@@ -106,6 +140,7 @@ public class WindowsDefaultMicrophoneManager
                 return false;
             }
 
+            _logger.LogInformation("Restoring original default microphone (ID: {OriginalId})", _originalDefaultMicId);
             SetDeviceAsDefault(_originalDefaultMicId);
             
             var enumerator = new MMDeviceEnumerator();
@@ -149,7 +184,7 @@ public class WindowsDefaultMicrophoneManager
     private void SetDeviceAsDefault(string deviceId)
     {
         // Windows stores default device settings in Registry under:
-        // Communications/default microphone setting: HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture
+        // HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture
         // We set the Default value to the device ID
         
         try
@@ -160,55 +195,70 @@ public class WindowsDefaultMicrophoneManager
                 return;
             }
 
-            // Try to update the Communications/default microphone setting
+            _logger.LogInformation("Attempting to set default microphone to device ID: {DeviceId}", deviceId);
+
+            // Registry path for capture device default
             var registryPath = @"Software\Microsoft\Windows\CurrentVersion\Multimedia\Audio Endpoints\Capture";
             
             try
             {
-                // First, try to open with write access
                 using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(registryPath, writable: true))
                 {
                     if (key == null)
                     {
-                        _logger.LogWarning("Registry key not found. Attempting to create...");
-                        // Try to create the key if it doesn't exist
+                        _logger.LogWarning("Registry key not found at: {Path}", registryPath);
+                        _logger.LogInformation("Attempting to create Registry key...");
+                        
                         try
                         {
                             using (var createdKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(registryPath))
                             {
+                                if (createdKey == null)
+                                {
+                                    _logger.LogError("Failed to create Registry key - CreateSubKey returned null");
+                                    return;
+                                }
+                                
                                 createdKey.SetValue("Default", deviceId);
-                                _logger.LogDebug("Created Registry key and set default microphone");
-                                return;
+                                _logger.LogInformation("Successfully created Registry key and set Default value to: {DeviceId}", deviceId);
+                                
+                                // Verify it was set
+                                var verifyValue = createdKey.GetValue("Default") as string;
+                                _logger.LogInformation("Verification: Registry Default value is now: {Value}", verifyValue ?? "(null)");
                             }
                         }
-                        catch (UnauthorizedAccessException)
+                        catch (UnauthorizedAccessException ex)
                         {
-                            _logger.LogError("Administrator privileges required to modify Registry. Run application as Administrator.");
+                            _logger.LogError(ex, "Administrator privileges required to create Registry key. Please run as Administrator (UAC).");
                             throw;
                         }
                     }
                     else
                     {
-                        // Set the default device
+                        // Set the default device value
+                        _logger.LogInformation("Registry key exists. Setting Default value to: {DeviceId}", deviceId);
                         key.SetValue("Default", deviceId);
-                        _logger.LogDebug("Updated Registry - set default microphone to device ID: {DeviceId}", deviceId);
+                        
+                        // Verify it was set
+                        var verifyValue = key.GetValue("Default") as string;
+                        _logger.LogInformation("Verification: Registry Default value is now: {Value}", verifyValue ?? "(null)");
                     }
                 }
             }
             catch (UnauthorizedAccessException ex)
             {
-                _logger.LogError(ex, "Registry write requires administrator privileges. Please run this application as Administrator.");
+                _logger.LogError(ex, "Access denied when writing to Registry. Administrator privileges required.");
                 throw;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error accessing Registry for audio device configuration");
+                _logger.LogError(ex, "Error accessing Registry at path: {Path}", registryPath);
                 throw;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to set default device in Registry");
+            _logger.LogError(ex, "Failed to set default device in Registry");
             throw;
         }
     }

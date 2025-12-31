@@ -140,7 +140,7 @@ public class PassthroughApplication
 
             _logger.LogInformation("Starting automatic smart passthrough mode");
             Console.WriteLine("Running in automatic call-detection mode. Press ENTER to exit.");
-
+            
             // Start monitoring thread
             var cts = new CancellationTokenSource();
             var monitoringTask = monitor.StartMonitoringAsync(cts.Token);

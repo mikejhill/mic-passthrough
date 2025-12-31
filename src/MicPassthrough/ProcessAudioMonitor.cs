@@ -90,170 +90,91 @@ public class ProcessAudioMonitor
     }
 
     /// <summary>
-    /// Checks if PhoneLink or Teams is currently using the monitored device.
-    /// Only detects calling applications by checking for active sessions.
-    /// Uses Windows Core Audio APIs to inspect device session enumeration.
+    /// Checks if PhoneLink is actively using the monitored device.
+    /// Uses two-level detection:
+    /// 1. PhoneExperienceHost process must be running (Phone Link app is open)
+    /// 2. Active microphone sessions must exist (Phone Link is actually using audio)
+    /// This prevents false positives when Phone Link is open but not in a call.
     /// </summary>
-    /// <returns>True if a calling app (PhoneLink/Teams) is using the device; false otherwise.</returns>
+    /// <returns>True if Phone Link is running AND actively using the microphone; false otherwise.</returns>
     private bool CheckDeviceUsage()
     {
         try
         {
-            var enumerator = new MMDeviceEnumerator();
+            // First check: Is PhoneExperienceHost process running?
+            var phoneExperienceProcesses = System.Diagnostics.Process.GetProcessesByName("PhoneExperienceHost");
             
-            // Get the specific device we're monitoring
-            MMDevice device = null;
+            if (phoneExperienceProcesses.Length == 0)
+            {
+                _logger.LogDebug("PhoneExperienceHost not running");
+                return false;
+            }
+
+            _logger.LogDebug("PhoneExperienceHost detected ({Count} instance{S})", 
+                phoneExperienceProcesses.Length, 
+                phoneExperienceProcesses.Length > 1 ? "s" : "");
+
+            // Second check: Are there active audio sessions on the microphone?
+            // Phone Link doesn't appear directly in sessions, but svchost.exe (Windows Runtime host) does
+            // Only count it as "in use" if there are external active sessions
             try
             {
-                device = enumerator.GetDevice(_deviceId);
-            }
-            catch
-            {
-                // Device not found or error, treat as not in use
-                return false;
-            }
+                var enumerator = new MMDeviceEnumerator();
+                MMDevice device = enumerator.GetDevice(_deviceId);
+                
+                if (device?.AudioSessionManager == null)
+                    return true;  // If we can't check, assume it's in use (safer)
 
-            if (device == null)
-                return false;
+                var sessionEnumerator = device.AudioSessionManager.Sessions;
+                int externalActiveSessions = 0;
 
-            // Check for active audio sessions on this device
-            // Phone Link and Teams show up as audio sessions when on a call
-            var sessionManager = device.AudioSessionManager;
-            if (sessionManager == null)
-                return false;
-
-            var sessionEnumerator = sessionManager.Sessions;
-            
-            // Look through all sessions and count active ones (excluding system and our own process)
-            int externalActiveSessionCount = 0;
-            bool phoneCallDetected = false;
-            
-            for (int i = 0; i < sessionEnumerator.Count; i++)
-            {
-                try
+                for (int i = 0; i < sessionEnumerator.Count; i++)
                 {
-                    var session = sessionEnumerator[i];
-                    
-                    // Skip system session (system sounds, notifications, etc.)
-                    if (session.IsSystemSoundsSession)
-                        continue;
-
-                    // Check if session is active
-                    // AudioSessionState: Inactive=0, Active=1, Expired=2
-                    if ((int)session.State == 1)  // Active
+                    try
                     {
-                        // Try to identify the session's display name
-                        string sessionName = GetSessionDisplayName(session);
+                        var session = sessionEnumerator[i];
                         
-                        _logger.LogDebug("Active audio session found: {SessionName}", sessionName);
-                        
-                        // Skip our own process's sessions (PassthroughEngine)
-                        // Sessions from "MicPassthrough" or from our process ID should be ignored
-                        if (sessionName.Contains("MicPassthrough", StringComparison.OrdinalIgnoreCase) ||
-                            sessionName.Contains("PassthroughEngine", StringComparison.OrdinalIgnoreCase))
-                        {
-                            _logger.LogDebug("Skipping our own process session: {SessionName}", sessionName);
+                        // Skip system sounds
+                        if (session.IsSystemSoundsSession)
                             continue;
-                        }
-                        
-                        // This is an external session
-                        externalActiveSessionCount++;
-                        
-                        // Check if this looks like a calling application
-                        if (IsCallingApplication(sessionName))
-                        {
-                            _logger.LogInformation("Calling application detected: {SessionName}", sessionName);
-                            phoneCallDetected = true;
-                        }
+
+                        // Only count active sessions
+                        if ((int)session.State != 1)  // 1 = Active
+                            continue;
+
+                        externalActiveSessions++;
+                        _logger.LogDebug("Active session on mic (Phone Link likely using it)");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Error checking session");
                     }
                 }
-                catch (Exception ex)
+
+                if (externalActiveSessions > 0)
                 {
-                    // Session might have been disposed, skip it
-                    _logger.LogDebug(ex, "Error processing audio session");
+                    _logger.LogInformation("Phone Link is using microphone (PhoneExperienceHost running + {SessionCount} active session{S})", 
+                        externalActiveSessions,
+                        externalActiveSessions > 1 ? "s" : "");
+                    return true;
+                }
+                else
+                {
+                    _logger.LogDebug("PhoneExperienceHost running but no active microphone sessions yet");
+                    return false;
                 }
             }
-
-            // If we have external active sessions (not from our process), a call is likely active
-            // If no external sessions (besides system), the call has ended
-            if (externalActiveSessionCount > 0 || phoneCallDetected)
+            catch (Exception ex)
             {
-                _logger.LogDebug("External device usage detected: {ExternalSessions} external active sessions", externalActiveSessionCount);
-                return true;
-            }
-            else
-            {
-                _logger.LogDebug("No external active sessions detected on device");
-                return false;
+                _logger.LogDebug(ex, "Error checking audio sessions, assuming Phone Link is using device");
+                return true;  // If we can't check, assume it's in use (safer)
             }
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Error checking device sessions");
+            _logger.LogDebug(ex, "Error checking for PhoneExperienceHost process");
             return false;
         }
-    }
-
-    /// <summary>
-    /// Attempts to get the display name of an audio session.
-    /// </summary>
-    private string GetSessionDisplayName(object session)
-    {
-        try
-        {
-            if (session == null)
-                return "Unknown";
-
-            // Try different ways to get display name based on NAudio session interface
-            var sessionType = session.GetType();
-            
-            // Try DisplayName property
-            var displayNameProp = sessionType.GetProperty("DisplayName");
-            if (displayNameProp != null)
-            {
-                var displayName = displayNameProp.GetValue(session) as string;
-                if (!string.IsNullOrEmpty(displayName))
-                    return displayName;
-            }
-
-            // Try to get process name from session if available
-            try
-            {
-                var stateValue = session.GetType().GetProperty("State")?.GetValue(session);
-                _logger.LogDebug("Session state: {State}", stateValue);
-            }
-            catch { }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Error getting session display name");
-        }
-
-        return "Unknown";
-    }
-
-    /// <summary>
-    /// Checks if a session name indicates a calling application.
-    /// </summary>
-    private bool IsCallingApplication(string sessionName)
-    {
-        if (string.IsNullOrEmpty(sessionName))
-            return false;
-
-        var callingAppKeywords = new[]
-        {
-            "phone", "link", "teams", "skype", "call", "whatsapp", 
-            "zoom", "meet", "discord", "webex", "hangout"
-        };
-
-        var lowerName = sessionName.ToLower();
-        foreach (var keyword in callingAppKeywords)
-        {
-            if (lowerName.Contains(keyword))
-                return true;
-        }
-
-        return false;
     }
 
     /// <summary>
