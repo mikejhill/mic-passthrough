@@ -5,7 +5,7 @@ using System;
 /// Main application orchestrator for the microphone passthrough system.
 /// Handles command-line argument parsing, initialization, and application lifecycle.
 /// </summary>
-class PassthroughApplication
+public class PassthroughApplication
 {
     private readonly ILogger _logger;
     private readonly AudioDeviceManager _deviceManager;

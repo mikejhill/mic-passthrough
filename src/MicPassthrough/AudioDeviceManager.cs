@@ -7,7 +7,7 @@ using System.Linq;
 /// <summary>
 /// Manages audio device enumeration and discovery for the passthrough application.
 /// </summary>
-class AudioDeviceManager
+public class AudioDeviceManager
 {
     private readonly ILogger _logger;
     private readonly MMDeviceEnumerator _enumerator;
