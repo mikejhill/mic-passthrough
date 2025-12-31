@@ -40,6 +40,11 @@ public class SystemTrayUI : IDisposable
     public string CableDevice { get; set; }
 
     /// <summary>
+    /// Gets or sets the action to invoke when the tray icon is double-clicked.
+    /// </summary>
+    public Action DoubleClickAction { get; set; }
+
+    /// <summary>
     /// Occurs when user clicks "Start Passthrough" menu item.
     /// </summary>
     public event EventHandler StartRequested;
@@ -131,28 +136,47 @@ public class SystemTrayUI : IDisposable
     {
         try
         {
-            // Try to load the icon from the application directory
             string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
-            if (!string.IsNullOrEmpty(exePath))
+            if (string.IsNullOrEmpty(exePath))
             {
-                var iconPath = Path.Combine(Path.GetDirectoryName(exePath), "icon.ico");
-                if (File.Exists(iconPath))
-                {
-                    _logger.LogDebug("Loaded tray icon from: {IconPath}", iconPath);
-                    return new Icon(iconPath);
-                }
-
-                // Try relative path for development
-                iconPath = Path.Combine(Path.GetDirectoryName(exePath), "../../docs/assets/icon.ico");
-                if (File.Exists(iconPath))
-                {
-                    _logger.LogDebug("Loaded tray icon from: {IconPath}", Path.GetFullPath(iconPath));
-                    return new Icon(iconPath);
-                }
+                _logger.LogWarning("Could not determine executable path, using system icon");
+                return SystemIcons.Application;
             }
 
-            // Fallback: use system application icon
-            _logger.LogWarning("Could not find application icon, using system icon");
+            var exeDir = Path.GetDirectoryName(exePath);
+
+            // Strategy 1: Look in same directory as exe (published/release builds)
+            var iconPath = Path.Combine(exeDir, "icon.ico");
+            if (File.Exists(iconPath))
+            {
+                _logger.LogInformation("Loaded tray icon from exe directory: {IconPath}", iconPath);
+                return new Icon(iconPath);
+            }
+
+            // Strategy 2: Look in docs/assets relative to exe (development from bin/Debug)
+            // From bin/Debug/net10.0-windows/ go to ../../docs/assets/icon.ico
+            iconPath = Path.Combine(exeDir, "..", "..", "..", "docs", "assets", "icon.ico");
+            var fullPath = Path.GetFullPath(iconPath);
+            if (File.Exists(fullPath))
+            {
+                _logger.LogInformation("Loaded tray icon from development path: {IconPath}", fullPath);
+                return new Icon(fullPath);
+            }
+
+            // Strategy 3: Look relative to workspace root (from src/MicPassthrough/bin/Debug/)
+            iconPath = Path.Combine(exeDir, "..", "..", "..", "..", "docs", "assets", "icon.ico");
+            fullPath = Path.GetFullPath(iconPath);
+            if (File.Exists(fullPath))
+            {
+                _logger.LogInformation("Loaded tray icon from workspace path: {IconPath}", fullPath);
+                return new Icon(fullPath);
+            }
+
+            _logger.LogWarning("Could not find icon.ico in any expected location, using system icon");
+            _logger.LogDebug("Searched paths: {Path1}, {Path2}, {Path3}", 
+                Path.Combine(exeDir, "icon.ico"),
+                Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "docs", "assets", "icon.ico")),
+                Path.GetFullPath(Path.Combine(exeDir, "..", "..", "..", "..", "docs", "assets", "icon.ico")));
             return SystemIcons.Application;
         }
         catch (Exception ex)
@@ -186,16 +210,9 @@ public class SystemTrayUI : IDisposable
 
     private void OnTrayIconDoubleClick(object sender, EventArgs e)
     {
-        _logger.LogDebug("Tray icon double-clicked - toggling passthrough");
-        // Double-click toggles passthrough
-        if (_isPassthroughActive)
-        {
-            OnStopClick(null, EventArgs.Empty);
-        }
-        else
-        {
-            OnStartClick(null, EventArgs.Empty);
-        }
+        _logger.LogDebug("Tray icon double-clicked - invoking double-click action");
+        // Invoke the double-click action (typically showing the status window)
+        DoubleClickAction?.Invoke();
     }
 
     /// <summary>

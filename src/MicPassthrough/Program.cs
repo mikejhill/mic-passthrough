@@ -152,110 +152,169 @@ class Program
     }
 
     /// <summary>
-    /// Runs the application in daemon mode with system tray indicator.
+    /// Runs the application in daemon mode with system tray indicator and status window.
     /// </summary>
     static int RunDaemonMode(PassthroughApplication application, Options opts, ILogger logger)
     {
         logger.LogInformation("Starting in daemon mode");
 
+        // Validate microphone is specified (required for daemon)
+        if (string.IsNullOrEmpty(opts.Mic))
+        {
+            logger.LogError("Daemon mode requires --mic to be specified");
+            logger.LogInformation("Use --list-devices to see available microphones");
+            return 1;
+        }
+
         // Initialize system tray UI
         using var trayUI = new SystemTrayUI(logger);
-        trayUI.MicrophoneDevice = opts.Mic ?? "Not specified";
+        trayUI.MicrophoneDevice = opts.Mic;
         trayUI.CableDevice = opts.CableRender;
 
-        // Create a flag to track daemon exit request
-        bool exitRequested = false;
-
-        // Wire up tray UI events
-        trayUI.StartRequested += (s, e) =>
+        // Initialize status window
+        var statusWindow = new StatusWindow(logger)
         {
-            logger.LogInformation("Tray: Start passthrough requested");
-            // For now, show notification that continuous passthrough starts
-            // In future, can implement dynamic passthrough start/stop
-            trayUI.IsPassthroughActive = true;
+            ShowInTaskbar = false
         };
+        statusWindow.SetMicrophoneDevice(opts.Mic);
+        statusWindow.SetCableDevice(opts.CableRender);
 
-        trayUI.StopRequested += (s, e) =>
-        {
-            logger.LogInformation("Tray: Stop passthrough requested");
-            trayUI.IsPassthroughActive = false;
-        };
+        // Shared state for controlling passthrough
+        bool isPassthroughActive = false;
+        PassthroughEngine engine = null;
+        object engineLock = new object();
 
-        trayUI.ExitRequested += (s, e) =>
+        // Create a wrapper logger that also updates the status window
+        var wrappedLogger = new DaemonLoggerWrapper(logger, (msg) =>
         {
-            logger.LogInformation("Tray: Exit requested");
-            exitRequested = true;
-            System.Windows.Forms.Application.Exit();
-        };
+            statusWindow.AddLog(msg);
+        });
 
-        // Start passthrough in background thread
-        var passthroughThread = new Thread(() =>
+        // Helper function to start passthrough
+        void StartPassthrough()
         {
-            try
+            lock (engineLock)
             {
-                // Skip list-devices check - daemon always needs to run passthrough
-                if (string.IsNullOrEmpty(opts.Mic))
+                if (isPassthroughActive)
                 {
-                    logger.LogError("Daemon mode requires --mic to be specified");
-                    exitRequested = true;
-                    System.Windows.Forms.Application.Exit();
+                    logger.LogDebug("Passthrough already active, ignoring start request");
                     return;
                 }
 
-                logger.LogInformation("Starting passthrough engine in background");
-                trayUI.IsPassthroughActive = true;
-                trayUI.ShowNotification("Microphone Passthrough", 
-                    $"Passthrough started\nMic: {opts.Mic}");
-
-                // Create and run the passthrough engine
-                var deviceManager = new AudioDeviceManager(logger);
-                var engine = new PassthroughEngine(logger, deviceManager,
-                    opts.Buffer, opts.ExclusiveMode, opts.PrebufferFrames);
-
                 try
                 {
+                    logger.LogInformation("Starting passthrough engine");
+                    var deviceManager = new AudioDeviceManager(wrappedLogger);
+                    engine = new PassthroughEngine(wrappedLogger, deviceManager,
+                        opts.Buffer, opts.ExclusiveMode, opts.PrebufferFrames);
+
                     engine.Initialize(opts.Mic, opts.CableRender, opts.Monitor, opts.EnableMonitor);
                     engine.Start();
-                    
-                    // Keep engine running until exit requested
-                    while (!exitRequested)
-                    {
-                        Thread.Sleep(100); // Check for exit every 100ms
-                    }
-                    
-                    engine.Stop();
-                    engine.Dispose();
+
+                    isPassthroughActive = true;
+                    trayUI.IsPassthroughActive = true;
+                    statusWindow.SetStatus(true);
+                    trayUI.ShowNotification("Microphone Passthrough", "Passthrough started");
+                    logger.LogInformation("Passthrough engine started successfully");
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Error in passthrough engine");
+                    logger.LogError(ex, "Failed to start passthrough engine");
+                    statusWindow.AddLog($"ERROR: {ex.Message}");
+                    isPassthroughActive = false;
                     trayUI.IsPassthroughActive = false;
-                    trayUI.ShowNotification("Microphone Passthrough", 
-                        $"Error: {ex.Message}");
+                    statusWindow.SetStatus(false);
+                    trayUI.ShowNotification("Microphone Passthrough", $"Failed to start: {ex.Message}");
+                }
+            }
+        }
+
+        // Helper function to stop passthrough
+        void StopPassthrough()
+        {
+            lock (engineLock)
+            {
+                if (!isPassthroughActive || engine == null)
+                {
+                    logger.LogDebug("Passthrough not active, ignoring stop request");
+                    return;
                 }
 
-                logger.LogInformation("Passthrough engine stopped");
-                trayUI.IsPassthroughActive = false;
+                try
+                {
+                    logger.LogInformation("Stopping passthrough engine");
+                    engine.Stop();
+                    engine.Dispose();
+                    engine = null;
+
+                    isPassthroughActive = false;
+                    trayUI.IsPassthroughActive = false;
+                    statusWindow.SetStatus(false);
+                    trayUI.ShowNotification("Microphone Passthrough", "Passthrough stopped");
+                    logger.LogInformation("Passthrough engine stopped successfully");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error stopping passthrough engine");
+                    statusWindow.AddLog($"ERROR stopping: {ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Passthrough thread failed");
-            }
-        })
+        }
+
+        // Wire up tray UI events
+        trayUI.StartRequested += (s, e) => StartPassthrough();
+        trayUI.StopRequested += (s, e) => StopPassthrough();
+        trayUI.ExitRequested += (s, e) =>
         {
-            IsBackground = true  // Background thread won't prevent exit
+            logger.LogInformation("Exit requested from tray menu");
+            StopPassthrough();
+            System.Windows.Forms.Application.Exit();
         };
-        passthroughThread.Start();
+
+        // Wire up status window toggle
+        statusWindow.ToggleRequested += (s, e) =>
+        {
+            if (isPassthroughActive)
+                StopPassthrough();
+            else
+                StartPassthrough();
+        };
+
+        // Wire up status window to show on tray double-click
+        trayUI.DoubleClickAction = () =>
+        {
+            if (statusWindow.Visible)
+            {
+                statusWindow.Hide();
+                statusWindow.ShowInTaskbar = false;
+            }
+            else
+            {
+                statusWindow.Show();
+                statusWindow.ShowInTaskbar = true;
+                statusWindow.Activate();
+            }
+        };
 
         // Show initial notification
         trayUI.ShowNotification("Microphone Passthrough",
             $"Daemon started\nMic: {opts.Mic}\nCable: {opts.CableRender}");
+        statusWindow.AddLog("Daemon mode started");
+        statusWindow.AddLog($"Microphone: {opts.Mic}");
+        statusWindow.AddLog($"Cable: {opts.CableRender}");
+        if (opts.AutoSwitch)
+            statusWindow.AddLog("Auto-switch: Enabled (monitoring call detection)");
 
         logger.LogDebug("Running Windows Forms application loop for system tray");
-        // Keep the application alive while daemon is running (WinForms message loop)
+
+        // Run the message loop
         System.Windows.Forms.Application.Run();
 
+        // Cleanup
         logger.LogInformation("Daemon mode exiting");
+        StopPassthrough();
+        statusWindow?.Dispose();
+
         return 0;
     }
 }
