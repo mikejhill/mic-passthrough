@@ -277,8 +277,8 @@ class Program
                     engine.Dispose();
                     engine = null;
 
-                    // Restore original microphone if we switched it (both enabled and auto-switch modes)
-                    if (micManager != null && autoSwitchStarted)
+                    // Restore original microphone if we switched it
+                    if (micManager != null)
                     {
                         try
                         {
@@ -289,6 +289,7 @@ class Program
                         {
                             logger.LogWarning(ex, "Could not restore original microphone");
                         }
+                        micManager = null;  // Clear micManager after restoration
                     }
 
                     isPassthroughActive = false;
