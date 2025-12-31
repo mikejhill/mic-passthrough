@@ -41,7 +41,10 @@ jobs:
       run: dotnet test --configuration Release --no-build --verbosity normal
 
     - name: Publish executable
-      run: dotnet publish src/MicPassthrough/MicPassthrough.csproj --configuration Release --no-build --runtime win-x64 --self-contained true -p:PublishSingleFile=true --output ./publish
+      # Self-contained single-file with compression
+      # Size: ~37MB (includes .NET runtime, no installation needed)
+      # Alternative: Framework-dependent (~1.6MB) requires users to install .NET 10.0
+      run: dotnet publish src/MicPassthrough/MicPassthrough.csproj --configuration Release --no-build --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true --output ./publish
       
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
