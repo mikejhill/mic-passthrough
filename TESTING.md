@@ -37,25 +37,36 @@ These require actual Windows WASAPI audio devices and VB-Audio Virtual Cable:
 3. At least one audio **input device** (microphone)
 4. At least one audio **output device** (speakers/headphones)
 
-#### Enabling Hardware Tests:
+## How to Run Hardware Tests
 
-**On Windows (PowerShell):**
+Hardware tests are **conditionally skipped** based on the `RUN_HARDWARE_TESTS` environment variable using a custom `[ConditionalHardwareTest]` attribute.
+
+### Setting the Environment Variable
+
+**Windows PowerShell:**
 ```powershell
 $env:RUN_HARDWARE_TESTS = "1"
-dotnet test --filter "_Hardware"
+dotnet test
 ```
 
-**On Windows (Command Prompt):**
+**Windows Command Prompt:**
 ```batch
 set RUN_HARDWARE_TESTS=1
-dotnet test --filter "_Hardware"
+dotnet test
 ```
 
-**On Linux/macOS (Bash/Zsh):**
+**Linux/macOS (Bash/Zsh):**
 ```bash
 export RUN_HARDWARE_TESTS=1
-dotnet test --filter "_Hardware"
+dotnet test
 ```
+
+### What Happens
+
+- **Without `RUN_HARDWARE_TESTS` set:** 11 tests pass, 4 hardware tests are skipped ✅
+- **With `RUN_HARDWARE_TESTS=1`:** All 15 tests run
+  - Tests will pass if devices are configured correctly
+  - Tests will fail gracefully if devices are missing (expected behavior)
 
 #### Hardware Tests Description:
 
@@ -84,7 +95,20 @@ dotnet test --filter "_Hardware"
 ## Running All Tests
 
 ```bash
-# Run all tests (unit tests only, skips hardware tests)
+# Run all tests (unit tests only, skips hardware tests by default)
+dotnet test
+
+# Run ALL tests including hardware integration tests
+# Windows PowerShell:
+$env:RUN_HARDWARE_TESTS = "1"
+dotnet test
+
+# Windows Command Prompt:
+set RUN_HARDWARE_TESTS=1
+dotnet test
+
+# Linux/macOS:
+export RUN_HARDWARE_TESTS=1
 dotnet test
 
 # Run with verbose output
@@ -93,7 +117,7 @@ dotnet test --verbosity normal
 # Run specific test class
 dotnet test --filter "OptionsParsingTests"
 
-# Run hardware tests only (requires prerequisites and RUN_HARDWARE_TESTS=1)
+# Run only hardware tests
 dotnet test --filter "_Hardware"
 
 # Run tests with detailed logging
