@@ -16,6 +16,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - N/A
 
+## [0.1.1] - 2025-12-31
+
+### Changed
+- **Migrated from CommandLineParser to System.CommandLine**: Replaced CommandLineParser 2.9.1 with Microsoft's System.CommandLine (2.0.0-beta4) for CLI argument parsing
+  - **Benefits**: Trim-compatible library, better startup performance (no reflection), modern type-safe API, Microsoft-maintained
+  - **Size impact**: Executable reduced from 37MB to 12MB (67% reduction) with trimming and compression enabled
+  - **Note**: Trimming enabled with `<BuiltInComInteropSupport>true</BuiltInComInteropSupport>` to preserve NAudio WASAPI COM support
+  - See [docs/adr/0001-migrate-to-system-commandline.md](docs/adr/0001-migrate-to-system-commandline.md) for detailed decision rationale
+- Updated Options.cs to use plain C# class instead of attribute-based configuration
+- Updated Program.cs with RootCommand-based CLI parsing
+- Updated OptionsParsingTests to validate Options class properties directly
+
+### Added
+- Architecture Decision Record: [ADR-0001: Migrate to System.CommandLine](docs/adr/0001-migrate-to-system-commandline.md)
+
+### Fixed
+- N/A
+
+### Changed
+- N/A
+
 ## [0.1.0] - 2025-12-31
 
 ### Added
