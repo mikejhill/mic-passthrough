@@ -9,8 +9,6 @@ jobs:
   release:
     runs-on: windows-latest
     name: Build and Release
-    permissions:
-      contents: write
 
     steps:
     - name: Checkout code
