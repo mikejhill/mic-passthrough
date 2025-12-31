@@ -9,6 +9,8 @@ jobs:
   release:
     runs-on: windows-latest
     name: Build and Release
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout code
@@ -39,7 +41,7 @@ jobs:
       run: dotnet test --configuration Release --no-build --verbosity normal
 
     - name: Publish executable
-      run: dotnet publish src/MicPassthrough/MicPassthrough.csproj --configuration Release --no-build --self-contained false --output ./publish
+      run: dotnet publish src/MicPassthrough/MicPassthrough.csproj --configuration Release --no-build --runtime win-x64 --self-contained true -p:PublishSingleFile=true --output ./publish
       
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
