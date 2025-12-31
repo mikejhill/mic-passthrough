@@ -44,7 +44,17 @@ jobs:
 
     - name: Run tests
       # Verify tests pass before creating release
-      run: dotnet test --configuration Release --no-build --verbosity normal
+      run: dotnet test --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx" --logger "junit;LogFileName=test-results.xml" --results-directory ./TestResults
+
+    - name: Publish Test Results
+      uses: EnricoMi/publish-unit-test-result-action/windows@v2
+      if: always()
+      with:
+        files: |
+          TestResults/**/*.xml
+          TestResults/**/*.trx
+        check_name: "Test Results"
+        comment_title: "Unit Test Results"
 
     - name: Publish executable
       # Self-contained single-file with trimming and compression
