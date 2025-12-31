@@ -45,8 +45,24 @@ public partial class StatusWindow : Form
             Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 6,
-            Padding = new Padding(10)
+            Padding = new Padding(10),
+            AutoSize = false,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink
         };
+
+        // Set up row and column styles
+        // Rows 0-3: Auto size (status, mic, cable, log title)
+        // Row 4: Expand to fill remaining space
+        // Row 5: Auto size (buttons)
+        mainPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));  // Row 0
+        mainPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));  // Row 1
+        mainPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));  // Row 2
+        mainPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));  // Row 3
+        mainPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // Row 4 - expand
+        mainPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));  // Row 5
+
+        mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));  // Column 0
+        mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));  // Column 1
 
         // Status section
         statusLabel = new Label
@@ -103,7 +119,6 @@ public partial class StatusWindow : Form
         };
         mainPanel.Controls.Add(logBox, 0, 4);
         mainPanel.SetColumnSpan(logBox, 2);
-        mainPanel.RowStyles[4] = new RowStyle(SizeType.Percent, 100);  // Make log box expandable
 
         // Buttons
         var buttonPanel = new FlowLayoutPanel
