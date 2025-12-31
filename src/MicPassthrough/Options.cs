@@ -70,4 +70,14 @@ public class Options
     [Option('v', "verbose", Default = false,
         HelpText = "Enable detailed logging with timestamps.")]
     public bool Verbose { get; set; }
+
+    /// <summary>
+    /// Enable automatic passthrough control based on call activity detection.
+    /// When enabled, passthrough activates only when PhoneLink (or other apps) 
+    /// actively use the microphone, and automatically switches Windows default microphone
+    /// between the user's physical microphone and CABLE Output.
+    /// </summary>
+    [Option('a', "auto-switch", Default = false,
+        HelpText = "Enable automatic passthrough control and default microphone switching when calls are active. Requires --mic to be set.")]
+    public bool AutoSwitch { get; set; }
 }

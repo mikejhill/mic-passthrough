@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 /// <summary>
 /// Main application orchestrator for the microphone passthrough system.
@@ -49,9 +51,26 @@ public class PassthroughApplication
 
     /// <summary>
     /// Initializes and runs the audio passthrough engine.
+    /// If --auto-switch is enabled, monitors for call activity and controls passthrough lifecycle automatically.
     /// </summary>
     /// <param name="options">Application options containing device names and configuration.</param>
     private void RunPassthrough(Options options)
+    {
+        if (options.AutoSwitch)
+        {
+            RunAutoSwitchPassthrough(options);
+        }
+        else
+        {
+            RunContinuousPassthrough(options);
+        }
+    }
+
+    /// <summary>
+    /// Runs continuous passthrough mode where audio passthrough runs at all times until user exits.
+    /// This is the default mode.
+    /// </summary>
+    private void RunContinuousPassthrough(Options options)
     {
         var engine = new PassthroughEngine(
             _logger,
@@ -73,7 +92,7 @@ public class PassthroughApplication
             engine.Start();
 
             // Wait for user exit signal
-            Console.WriteLine("Running. Press ENTER to exit. (Use --help for options)");
+            Console.WriteLine("Running (continuous mode). Press ENTER to exit. (Use --help for options)");
             Console.ReadLine();
 
             // Stop and cleanup
@@ -82,6 +101,142 @@ public class PassthroughApplication
         finally
         {
             engine.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Runs automatic smart passthrough mode where passthrough activates only when calls are detected.
+    /// Monitors when PhoneLink or other applications use the microphone and:
+    /// 1. Automatically starts passthrough
+    /// 2. Switches Windows default microphone to CABLE Output
+    /// 3. Monitors for when the application releases the microphone
+    /// 4. Stops passthrough and restores original microphone
+    /// </summary>
+    private void RunAutoSwitchPassthrough(Options options)
+    {
+        var engine = new PassthroughEngine(
+            _logger,
+            _deviceManager,
+            options.Buffer,
+            options.ExclusiveMode,
+            options.PrebufferFrames);
+
+        var micDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Capture, options.Mic);
+        var monitor = new ProcessAudioMonitor(_logger, micDevice.ID);
+        var micManager = new WindowsDefaultMicrophoneManager(_logger);
+        var cableDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Capture, options.Cable);
+
+        bool engineRunning = false;
+
+        try
+        {
+            // Initialize engine with settings
+            engine.Initialize(
+                options.Mic,
+                options.Cable,
+                options.Monitor,
+                options.EnableMonitor);
+
+            _logger.LogInformation("Starting automatic smart passthrough mode");
+            Console.WriteLine("Running in automatic call-detection mode. Press ENTER to exit.");
+
+            // Start monitoring thread
+            var cts = new CancellationTokenSource();
+            var monitoringTask = monitor.StartMonitoringAsync(cts.Token);
+
+            bool wasCallActive = false;
+
+            // Main monitoring loop
+            while (true)
+            {
+                // Check for user exit (non-blocking check)
+                if (Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Enter)
+                {
+                    break;
+                }
+
+                bool isCallActive = monitor.IsDeviceInUse;
+
+                // Handle call state transitions
+                if (!wasCallActive && isCallActive)
+                {
+                    // Call started - activate passthrough
+                    _logger.LogInformation("Call detected. Activating passthrough...");
+                    
+                    try
+                    {
+                        // Switch default microphone to CABLE Output
+                        if (micManager.SetDefaultMicrophone(cableDevice.ID))
+                        {
+                            _logger.LogInformation("Windows default microphone switched to CABLE Output");
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Could not switch Windows default microphone");
+                        }
+
+                        // Start audio passthrough
+                        engine.Start();
+                        engineRunning = true;
+                        _logger.LogInformation("Audio passthrough activated");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error activating passthrough");
+                    }
+                }
+                else if (wasCallActive && !isCallActive)
+                {
+                    // Call ended - deactivate passthrough
+                    _logger.LogInformation("Call ended. Deactivating passthrough...");
+
+                    try
+                    {
+                        if (engineRunning)
+                        {
+                            engine.Stop();
+                            engineRunning = false;
+                        }
+
+                        // Restore original microphone
+                        if (micManager.RestoreOriginalMicrophone())
+                        {
+                            _logger.LogInformation("Windows default microphone restored");
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Could not restore Windows default microphone");
+                        }
+
+                        _logger.LogInformation("Audio passthrough deactivated");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error deactivating passthrough");
+                    }
+                }
+
+                wasCallActive = isCallActive;
+                Thread.Sleep(100); // Check 10 times per second
+            }
+
+            // Stop monitoring
+            cts.Cancel();
+            Task.WaitAll(monitoringTask);
+
+            // Ensure passthrough is stopped and mic is restored
+            if (engineRunning)
+            {
+                engine.Stop();
+            }
+
+            micManager.RestoreOriginalMicrophone();
+        }
+        finally
+        {
+            monitor.Stop();
+            engine.Dispose();
+            _logger.LogInformation("Automatic passthrough mode terminated");
         }
     }
 }
