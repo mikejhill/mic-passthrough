@@ -1,4 +1,4 @@
-﻿using CommandLine;
+﻿using System.CommandLine;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -7,13 +7,108 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 class Program
 {
-    static int Main(string[] args)
+    static async Task<int> Main(string[] args)
     {
-        // Parse command-line arguments
-        return Parser.Default.ParseArguments<Options>(args)
-            .MapResult(
-                opts => RunApplication(opts),
-                _ => 1);
+        var rootCommand = BuildRootCommand();
+        return await rootCommand.InvokeAsync(args);
+    }
+
+    /// <summary>
+    /// Builds the root command with all options and their configurations.
+    /// </summary>
+    static RootCommand BuildRootCommand()
+    {
+        var rootCommand = new RootCommand("Microphone Passthrough - Routes microphone audio to VB-Audio Virtual Cable");
+
+        // Define all options with aliases, descriptions, and defaults
+        var micOption = new Option<string>(
+            aliases: new[] { "-m", "--mic" },
+            description: "Microphone device name (exact match). Use --list-devices to see available names.");
+
+        var cableRenderOption = new Option<string>(
+            aliases: new[] { "-c", "--cable-render" },
+            getDefaultValue: () => "CABLE Input (VB-Audio Virtual Cable)",
+            description: "VB-Cable render device name for audio output (exact match). Default: 'CABLE Input (VB-Audio Virtual Cable)'.");
+
+        var cableCaptureOption = new Option<string>(
+            aliases: new[] { "--cable-capture" },
+            getDefaultValue: () => "CABLE Output (VB-Audio Virtual Cable)",
+            description: "VB-Cable capture device name for default microphone (exact match). Default: 'CABLE Output (VB-Audio Virtual Cable)'. Only used with --auto-switch.");
+
+        var monitorOption = new Option<string>(
+            aliases: new[] { "-o", "--monitor" },
+            description: "Monitor/speaker device name (exact match). Only used with --enable-monitor.");
+
+        var enableMonitorOption = new Option<bool>(
+            aliases: new[] { "-e", "--enable-monitor" },
+            getDefaultValue: () => false,
+            description: "Enable real-time audio monitoring through speakers/headphones.");
+
+        var bufferOption = new Option<int>(
+            aliases: new[] { "-b", "--buffer" },
+            getDefaultValue: () => 100,
+            description: "Buffer size in milliseconds. Larger = more stable but higher latency. Increase if choppy (150-200ms), decrease for lower latency (50-75ms).");
+
+        var exclusiveModeOption = new Option<bool>(
+            aliases: new[] { "-x", "--exclusive-mode" },
+            getDefaultValue: () => true,
+            description: "Attempt exclusive audio mode for lower latency (~10ms). Disable if other apps need audio access or device errors occur.");
+
+        var prebufferFramesOption = new Option<int>(
+            aliases: new[] { "-p", "--prebuffer-frames" },
+            getDefaultValue: () => 3,
+            description: "Audio frames to buffer before playback. Prevents startup clicks. Increase (4-5) if clicks occur, decrease (1-2) for faster startup.");
+
+        var listDevicesOption = new Option<bool>(
+            aliases: new[] { "-l", "--list-devices" },
+            getDefaultValue: () => false,
+            description: "List all available audio devices and exit.");
+
+        var verboseOption = new Option<bool>(
+            aliases: new[] { "-v", "--verbose" },
+            getDefaultValue: () => false,
+            description: "Enable detailed logging with timestamps.");
+
+        var autoSwitchOption = new Option<bool>(
+            aliases: new[] { "-a", "--auto-switch" },
+            getDefaultValue: () => false,
+            description: "Enable automatic passthrough control and default microphone switching when calls are active. Requires --mic to be set.");
+
+        // Add all options to root command
+        rootCommand.AddOption(micOption);
+        rootCommand.AddOption(cableRenderOption);
+        rootCommand.AddOption(cableCaptureOption);
+        rootCommand.AddOption(monitorOption);
+        rootCommand.AddOption(enableMonitorOption);
+        rootCommand.AddOption(bufferOption);
+        rootCommand.AddOption(exclusiveModeOption);
+        rootCommand.AddOption(prebufferFramesOption);
+        rootCommand.AddOption(listDevicesOption);
+        rootCommand.AddOption(verboseOption);
+        rootCommand.AddOption(autoSwitchOption);
+
+        // Set the handler using context to access parsed values
+        rootCommand.SetHandler(context =>
+        {
+            var options = new Options
+            {
+                Mic = context.ParseResult.GetValueForOption(micOption),
+                CableRender = context.ParseResult.GetValueForOption(cableRenderOption),
+                CableCapture = context.ParseResult.GetValueForOption(cableCaptureOption),
+                Monitor = context.ParseResult.GetValueForOption(monitorOption),
+                EnableMonitor = context.ParseResult.GetValueForOption(enableMonitorOption),
+                Buffer = context.ParseResult.GetValueForOption(bufferOption),
+                ExclusiveMode = context.ParseResult.GetValueForOption(exclusiveModeOption),
+                PrebufferFrames = context.ParseResult.GetValueForOption(prebufferFramesOption),
+                ListDevices = context.ParseResult.GetValueForOption(listDevicesOption),
+                Verbose = context.ParseResult.GetValueForOption(verboseOption),
+                AutoSwitch = context.ParseResult.GetValueForOption(autoSwitchOption)
+            };
+
+            context.ExitCode = RunApplication(options);
+        });
+
+        return rootCommand;
     }
 
     /// <summary>
