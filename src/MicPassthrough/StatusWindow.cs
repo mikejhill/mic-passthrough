@@ -16,12 +16,10 @@ public partial class StatusWindow : Form
     private Label micLabel;
     private Label cableLabel;
     private TextBox logBox;
-    private Button toggleButton;
     private Button closeButton;
     private Queue<string> logHistory;
     private const int MaxLogLines = 100;
 
-    public event EventHandler<EventArgs> ToggleRequested;
     public event EventHandler<string> ModeRequested;
 
     public StatusWindow(ILogger logger)
@@ -171,16 +169,7 @@ public partial class StatusWindow : Form
         };
         closeButton.Click += (s, e) => this.Close();
 
-        toggleButton = new Button
-        {
-            Text = "Start Passthrough",
-            Width = 150,
-            Height = 30
-        };
-        toggleButton.Click += (s, e) => ToggleRequested?.Invoke(this, EventArgs.Empty);
-
         buttonPanel.Controls.Add(closeButton);
-        buttonPanel.Controls.Add(toggleButton);
         buttonPanel.Controls.Add(disabledModeButton);
         buttonPanel.Controls.Add(autoSwitchModeButton);
         buttonPanel.Controls.Add(enabledModeButton);
@@ -204,13 +193,11 @@ public partial class StatusWindow : Form
         {
             statusValueLabel.Text = "Active";
             statusValueLabel.ForeColor = Color.Green;
-            toggleButton.Text = "Stop Passthrough";
         }
         else
         {
             statusValueLabel.Text = "Inactive";
             statusValueLabel.ForeColor = Color.Red;
-            toggleButton.Text = "Start Passthrough";
         }
     }
 

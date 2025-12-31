@@ -311,22 +311,11 @@ class Program
         string currentMode = daemonMode;
 
         // Wire up tray UI events
-        trayUI.StartRequested += (s, e) => StartPassthrough();
-        trayUI.StopRequested += (s, e) => StopPassthrough();
         trayUI.ExitRequested += (s, e) =>
         {
             logger.LogInformation("Exit requested from tray menu");
             StopPassthrough();
             System.Windows.Forms.Application.Exit();
-        };
-
-        // Wire up status window toggle
-        statusWindow.ToggleRequested += (s, e) =>
-        {
-            if (isPassthroughActive)
-                StopPassthrough();
-            else
-                StartPassthrough();
         };
 
         // Wire up status window mode switching
@@ -336,7 +325,7 @@ class Program
             if (isPassthroughActive)
                 StopPassthrough();
             
-            // Update mode
+            // Update mode and apply behavior
             string oldMode = currentMode;
             if (mode == "enabled")
             {
@@ -352,7 +341,6 @@ class Program
             {
                 currentMode = "disabled";
                 opts.AutoSwitch = false;
-                // Disabled mode: no auto-start, manual only
             }
             
             if (oldMode != currentMode)
@@ -361,9 +349,42 @@ class Program
                 statusWindow.AddLog($"Mode switched: {oldMode} -> {currentMode}");
                 trayUI.ShowNotification("Mode Changed", $"Daemon mode: {currentMode}");
                 
-                // If switching to auto-switch and monitor not running, restart it
-                if (currentMode == "auto-switch" && audioMonitor == null)
+                // Handle mode-specific state changes
+                if (currentMode == "enabled")
                 {
+                    // Enabled mode: Stop monitor if running, then start passthrough
+                    if (monitorCts != null)
+                    {
+                        logger.LogDebug("Stopping auto-switch monitor for enabled mode");
+                        monitorCts.Cancel();
+                        if (monitorThread != null && monitorThread.IsAlive)
+                        {
+                            if (!monitorThread.Join(1000))
+                                logger.LogWarning("Monitor thread did not exit in time");
+                        }
+                        audioMonitor = null;
+                        monitorCts.Dispose();
+                        monitorCts = null;
+                        monitorThread = null;
+                        statusWindow.AddLog("Auto-switch monitor stopped");
+                    }
+                    // Start passthrough in enabled mode
+                    if (!isPassthroughActive)
+                    {
+                        logger.LogInformation("Enabled mode: Starting passthrough");
+                        StartPassthrough(isAutoStarted: false);
+                    }
+                }
+                else if (currentMode == "auto-switch")
+                {
+                    // Auto-switch mode: Start monitor for automatic control
+                    if (isPassthroughActive)
+                    {
+                        // Stop manual passthrough before starting auto-switch
+                        logger.LogInformation("Stopping manual passthrough to start auto-switch");
+                        StopPassthrough();
+                    }
+                    
                     try
                     {
                         // Wait for old monitor thread to exit before creating new one
@@ -382,10 +403,17 @@ class Program
                         monitorThread = new Thread(() =>
                         {
                             bool lastDetectedInUse = false;
-                            while (!monitorCts.Token.IsCancellationRequested)
+                            while (monitorCts != null && !monitorCts.Token.IsCancellationRequested)
                             {
                                 try
                                 {
+                                    // Check if monitor was nulled out by mode switching
+                                    if (audioMonitor == null || monitorCts == null)
+                                    {
+                                        logger.LogDebug("Auto-switch monitor nulled, exiting thread");
+                                        break;
+                                    }
+                                    
                                     bool isInUse = audioMonitor.IsDeviceInUse;
                                     if (isInUse && !lastDetectedInUse && !isPassthroughActive)
                                     {
@@ -405,6 +433,7 @@ class Program
                                 }
                                 System.Threading.Thread.Sleep(500);
                             }
+                            logger.LogDebug("Auto-switch monitor thread exiting");
                         })
                         {
                             IsBackground = true
@@ -417,27 +446,29 @@ class Program
                         statusWindow.AddLog($"ERROR enabling auto-switch: {ex.Message}");
                     }
                 }
-                // If switching away from auto-switch, stop the monitor
-                else if (currentMode != "auto-switch" && monitorCts != null)
+                else if (currentMode == "disabled")
                 {
-                    logger.LogDebug("Stopping auto-switch monitor");
-                    monitorCts.Cancel();
-                    
-                    // Wait for monitor thread to exit
-                    if (monitorThread != null && monitorThread.IsAlive)
+                    // Disabled mode: Stop everything
+                    if (monitorCts != null)
                     {
-                        logger.LogDebug("Waiting for monitor thread to exit...");
-                        if (!monitorThread.Join(1000))  // Wait up to 1 second
+                        logger.LogDebug("Stopping auto-switch monitor for disabled mode");
+                        monitorCts.Cancel();
+                        if (monitorThread != null && monitorThread.IsAlive)
                         {
-                            logger.LogWarning("Monitor thread did not exit in time");
+                            if (!monitorThread.Join(1000))
+                                logger.LogWarning("Monitor thread did not exit in time");
                         }
+                        audioMonitor = null;
+                        monitorCts.Dispose();
+                        monitorCts = null;
+                        monitorThread = null;
+                        statusWindow.AddLog("Auto-switch monitor stopped");
                     }
-                    
-                    audioMonitor = null;
-                    monitorCts.Dispose();
-                    monitorCts = null;
-                    monitorThread = null;
-                    statusWindow.AddLog("Auto-switch monitor stopped");
+                    if (isPassthroughActive)
+                    {
+                        logger.LogInformation("Disabled mode: Stopping passthrough");
+                        StopPassthrough();
+                    }
                 }
             }
         };
