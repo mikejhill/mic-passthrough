@@ -13,11 +13,21 @@ public class Options
     public string Mic { get; set; }
 
     /// <summary>
-    /// VB-Cable input device name (exact match).
+    /// VB-Cable render device name for audio passthrough output (exact match).
+    /// This is the VB-Audio Virtual Cable INPUT device (playback/speaker side).
     /// </summary>
-    [Option('c', "cable", Default = "CABLE Input (VB-Audio Virtual Cable)",
-        HelpText = "VB-Cable input device name (exact match).")]
-    public string Cable { get; set; }
+    [Option('c', "cable-render", Default = "CABLE Input (VB-Audio Virtual Cable)",
+        HelpText = "VB-Cable render device name for audio output (exact match). Default: 'CABLE Input (VB-Audio Virtual Cable)'.")]
+    public string CableRender { get; set; }
+
+    /// <summary>
+    /// VB-Cable capture device name for setting as default microphone (exact match).
+    /// This is the VB-Audio Virtual Cable OUTPUT device (recording/microphone side).
+    /// Only used with --auto-switch mode.
+    /// </summary>
+    [Option("cable-capture", Default = "CABLE Output (VB-Audio Virtual Cable)",
+        HelpText = "VB-Cable capture device name for default microphone (exact match). Default: 'CABLE Output (VB-Audio Virtual Cable)'. Only used with --auto-switch.")]
+    public string CableCapture { get; set; }
 
     /// <summary>
     /// Monitor/speaker device name (exact match). Only used with --enable-monitor.
