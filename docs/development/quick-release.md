@@ -143,6 +143,6 @@ git push origin v2.0.0
 ---
 
 Need help? See:
-- [RELEASE_GUIDE.md](RELEASE_GUIDE.md) - Detailed step-by-step
-- [VERSIONING.md](VERSIONING.md) - Version strategy
-- [WORKFLOWS.md](WORKFLOWS.md) - How workflows work
+- [release-guide.md](release-guide.md) - Detailed step-by-step
+- [versioning.md](versioning.md) - Version strategy
+- [workflows.md](workflows.md) - How workflows work

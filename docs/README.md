@@ -4,10 +4,26 @@ This directory contains all technical documentation for the MicPassthrough proje
 
 ## Structure
 
+### `/guides`
+User-facing guides and feature documentation.
+
+- [testing.md](guides/testing.md) - Test suite documentation and hardware test setup
+- [daemon-mode.md](guides/daemon-mode.md) - Daemon mode with system tray UI
+- [auto-switch.md](guides/auto-switch.md) - Auto-switch mode improvements and call detection
+
+### `/development`
+Developer processes, workflows, and release management.
+
+- [ci-cd.md](development/ci-cd.md) - CI/CD configuration details
+- [workflows.md](development/workflows.md) - GitHub Actions workflow diagrams
+- [quick-release.md](development/quick-release.md) - 1-page release checklist
+- [release-guide.md](development/release-guide.md) - Complete release walkthrough
+- [versioning.md](development/versioning.md) - Semantic versioning strategy
+
 ### `/architecture`
 Technical documentation about the system design, code organization, and implementation details.
 
-- [REFACTORING.md](architecture/REFACTORING.md) - History of architecture decisions and refactoring notes
+- [refactoring.md](architecture/refactoring.md) - History of architecture decisions and refactoring notes
 
 ### `/adr`
 Architecture Decision Records (ADRs) document significant architectural decisions made throughout the project lifecycle.
@@ -49,7 +65,9 @@ To create a new ADR:
 ## Contributing
 
 When adding new documentation:
-- Place user-facing documentation in the root README.md
+- Place project overview in the root README.md
+- Place user guides and feature docs in `/guides`
+- Place developer processes and CI/CD docs in `/development`
 - Place technical/architectural docs in `/architecture`
 - Document significant decisions as ADRs in `/adr`
 - Keep docs up-to-date with code changes

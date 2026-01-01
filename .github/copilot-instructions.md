@@ -38,17 +38,22 @@ MicPassthrough/
 │       └── MicPassthrough.Tests.csproj
 ├── docs/
 │   ├── README.md                # Documentation index
-│   ├── QUICK_RELEASE.md         # 1-page release checklist
-│   ├── RELEASE_GUIDE.md         # Complete release walkthrough
-│   ├── VERSIONING.md            # Semantic versioning strategy
-│   ├── WORKFLOWS.md             # GitHub Actions workflow diagrams
-│   ├── CI_CD.md                 # CI/CD configuration details
+│   ├── guides/                  # User-facing guides
+│   │   ├── testing.md           # Test suite documentation
+│   │   ├── daemon-mode.md       # Daemon mode with system tray
+│   │   └── auto-switch.md       # Auto-switch improvements
+│   ├── development/             # Developer processes
+│   │   ├── ci-cd.md             # CI/CD configuration details
+│   │   ├── workflows.md         # GitHub Actions workflow diagrams
+│   │   ├── quick-release.md     # 1-page release checklist
+│   │   ├── release-guide.md     # Complete release walkthrough
+│   │   └── versioning.md        # Semantic versioning strategy
 │   ├── architecture/
-│   │   └── REFACTORING.md       # Architecture decisions & history
-│   └── adr/
-│       └── template.md           # ADR template (MADR format)
+│   │   └── refactoring.md       # Architecture decisions & history
+│   ├── adr/
+│   │   └── template.md           # ADR template (MADR format)
+│   └── assets/
 ├── README.md                    # Main project documentation
-├── TESTING.md                   # Test suite documentation
 ├── CHANGELOG.md                 # Release history (Keep a Changelog format)
 ├── LICENSE                      # MIT license
 └── MicPassthrough.sln           # Visual Studio solution file
@@ -193,7 +198,7 @@ dotnet test
    - PATCH: Bug fixes and non-breaking changes
    - MINOR: New features (backward compatible)
    - MAJOR: Breaking changes
-   - See [docs/VERSIONING.md](../docs/VERSIONING.md) for details
+   - See [docs/development/versioning.md](../docs/development/versioning.md) for details
 
 3. **Architecture Decision Records (ADRs):**
    - Use MADR (Markdown Any Decision Records) format
@@ -203,15 +208,20 @@ dotnet test
 
 4. **Documentation Location Rules:**
    - **Project overview & getting started:** [README.md](../README.md)
-   - **Test documentation:** [TESTING.md](../TESTING.md)
-   - **Release process:** [docs/QUICK_RELEASE.md](../docs/QUICK_RELEASE.md)
-   - **Detailed release walkthrough:** [docs/RELEASE_GUIDE.md](../docs/RELEASE_GUIDE.md)
-   - **Version strategy:** [docs/VERSIONING.md](../docs/VERSIONING.md)
-   - **GitHub Actions workflows:** [docs/WORKFLOWS.md](../docs/WORKFLOWS.md)
-   - **Architecture & refactoring notes:** [docs/architecture/REFACTORING.md](../docs/architecture/REFACTORING.md)
-   - **Feature-specific documentation:** [docs/AUTO_SWITCH_IMPROVEMENTS.md](../docs/AUTO_SWITCH_IMPROVEMENTS.md), etc.
+   - **User guides & features:** [docs/guides/](../docs/guides/) folder
+     - [docs/guides/testing.md](../docs/guides/testing.md) - Test suite documentation
+     - [docs/guides/daemon-mode.md](../docs/guides/daemon-mode.md) - Daemon mode feature
+     - [docs/guides/auto-switch.md](../docs/guides/auto-switch.md) - Auto-switch improvements
+   - **Developer processes:** [docs/development/](../docs/development/) folder
+     - [docs/development/quick-release.md](../docs/development/quick-release.md) - Release checklist
+     - [docs/development/release-guide.md](../docs/development/release-guide.md) - Detailed release walkthrough
+     - [docs/development/versioning.md](../docs/development/versioning.md) - Version strategy
+     - [docs/development/workflows.md](../docs/development/workflows.md) - GitHub Actions workflows
+     - [docs/development/ci-cd.md](../docs/development/ci-cd.md) - CI/CD configuration
+   - **Architecture & design:** [docs/architecture/refactoring.md](../docs/architecture/refactoring.md)
+   - **Architecture decisions:** [docs/adr/](../docs/adr/)
    
-   **Rule:** Feature-specific documentation and permanent reference guides go in `docs/` folder with descriptive filenames. Only root-level documentation goes directly in project root (README.md, LICENSE, CHANGELOG.md, TESTING.md).
+   **Rule:** Feature-specific documentation and permanent reference guides go in `docs/` with organized subdirectories. Only critical top-level files go in project root (README.md, LICENSE, CHANGELOG.md).
 
    **Point-in-Time Documentation (Avoid):**
    - Do NOT create session-based summary documents (e.g., IMPLEMENTATION_SUMMARY.md, CRITICAL_FIXES_SUMMARY.md)
@@ -232,7 +242,9 @@ Before committing:
 1. Run `git status` to see which files changed
 2. Run `git diff` to see the actual changes
 3. Review the line count: `git diff --stat` shows insertions/deletions
-4. Write commit message that accurately reflects those changes ONLY
+4. Add only the relevant to the commit (`git add <files>`)
+5. Ensure unrelated changes are NOT staged
+6. Write commit message that accurately reflects those changes ONLY
 
 Common mistakes to avoid:
 - ❌ Writing multi-point commit messages for single-line changes (except when justified)
@@ -504,9 +516,9 @@ See [docs/QUICK_RELEASE.md](../docs/QUICK_RELEASE.md) for checklist.
 ### Documentation
 
 - Update [CHANGELOG.md](../CHANGELOG.md) for all user-facing changes
-- Create/update [docs/architecture/REFACTORING.md](../docs/architecture/REFACTORING.md) for significant architecture changes
+- Create/update [docs/architecture/refactoring.md](../docs/architecture/refactoring.md) for significant architecture changes
 - For major decisions, create a new ADR using [MADR format](../docs/adr/template.md)
-- Keep [TESTING.md](../TESTING.md) in sync with test suite changes
+- Keep [docs/guides/testing.md](../docs/guides/testing.md) in sync with test suite changes
 - Update relevant docs in [docs/](../docs/) directory for workflow/process changes
 
 ## Regularly Updated Documentation
@@ -516,14 +528,15 @@ The following files should be reviewed/updated when making relevant changes:
 | File | When to Update |
 |------|----------------|
 | [README.md](../README.md) | New features, setup changes, requirements |
-| [TESTING.md](../TESTING.md) | New tests, test prerequisites, test execution |
+| [docs/guides/testing.md](../docs/guides/testing.md) | New tests, test prerequisites, test execution |
 | [CHANGELOG.md](../CHANGELOG.md) | **Every** release (Added/Fixed/Changed sections) |
-| [docs/QUICK_RELEASE.md](../docs/QUICK_RELEASE.md) | Release process changes |
-| [docs/VERSIONING.md](../docs/VERSIONING.md) | Version strategy changes |
-| [docs/WORKFLOWS.md](../docs/WORKFLOWS.md) | GitHub Actions workflow changes |
-| [docs/architecture/REFACTORING.md](../docs/architecture/REFACTORING.md) | Architecture decisions, major refactoring |
+| [docs/development/quick-release.md](../docs/development/quick-release.md) | Release process changes |
+| [docs/development/versioning.md](../docs/development/versioning.md) | Version strategy changes |
+| [docs/development/workflows.md](../docs/development/workflows.md) | GitHub Actions workflow changes |
+| [docs/architecture/refactoring.md](../docs/architecture/refactoring.md) | Architecture decisions, major refactoring |
 | [docs/adr/](../docs/adr/) | Significant technical decisions |
-| [docs/AUTO_SWITCH_IMPROVEMENTS.md](../docs/AUTO_SWITCH_IMPROVEMENTS.md) | Auto-switch feature changes and testing |
+| [docs/guides/auto-switch.md](../docs/guides/auto-switch.md) | Auto-switch feature changes and testing |
+| [docs/guides/daemon-mode.md](../docs/guides/daemon-mode.md) | Daemon mode feature changes |
 
 ## Documentation Anti-Patterns
 
@@ -540,7 +553,7 @@ The following files should be reviewed/updated when making relevant changes:
 
 **Better Alternatives:**
 - Use [CHANGELOG.md](../CHANGELOG.md) for user-facing changes (what changed and why)
-- Use [docs/architecture/REFACTORING.md](../docs/architecture/REFACTORING.md) for significant code changes (why the change was necessary)
+- Use [docs/architecture/refactoring.md](../docs/architecture/refactoring.md) for significant code changes (why the change was necessary)
 - Use [docs/adr/](../docs/adr/) for major architectural decisions (context, decision, consequences)
 - Rely on git commit messages and pull request descriptions for development process history
 

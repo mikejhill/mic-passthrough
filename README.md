@@ -263,7 +263,7 @@ Features:
 - 🔔 Status notifications for all user actions
 - 🎨 Professional application icon in tray
 
-For detailed daemon mode usage, architecture, and advanced options, see [Daemon Mode Documentation](docs/DAEMON_MODE.md).
+For detailed daemon mode usage, architecture, and advanced options, see [Daemon Mode Documentation](docs/guides/daemon-mode.md).
 
 ## Testing
 
@@ -408,6 +408,12 @@ This project uses the following open-source libraries (all MIT licensed):
 - **Microsoft.Extensions.Logging** 9.0.0 - Logging framework ([github.com/dotnet/runtime](https://github.com/dotnet/runtime))
 - **Microsoft.Extensions.Logging.Console** 9.0.0 - Console log output ([github.com/dotnet/runtime](https://github.com/dotnet/runtime))
 - **System.Drawing.Common** 8.0.0 - Icon and graphics support for system tray UI ([github.com/dotnet/runtime](https://github.com/dotnet/runtime))
+
+## Documentation
+
+For comprehensive testing information, see [docs/guides/testing.md](docs/guides/testing.md).
+
+For daemon mode details, see [docs/guides/daemon-mode.md](docs/guides/daemon-mode.md).
 
 ## See Also
 

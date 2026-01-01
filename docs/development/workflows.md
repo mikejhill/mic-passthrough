@@ -241,6 +241,6 @@ CHANGELOG.md           # Release notes and history
 
 ## Next Steps
 
-- [Read RELEASE_GUIDE.md](RELEASE_GUIDE.md) to create your first release
-- [Read VERSIONING.md](VERSIONING.md) for version strategy
-- [Read CI_CD.md](../docs/CI_CD.md) for CI details
+- [Read release-guide.md](release-guide.md) to create your first release
+- [Read versioning.md](versioning.md) for version strategy
+- [Read ci-cd.md](ci-cd.md) for CI details
