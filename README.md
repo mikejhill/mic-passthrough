@@ -8,7 +8,7 @@
 A low-latency audio passthrough application that routes a microphone's audio to [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) using Windows WASAPI audio APIs.
 
 > [!NOTE]
-> **AI-Generated Code Disclaimer**: The source code in this project was primarily generated with AI assistance. While it has been reviewed and tested, it was not entirely hand-written. Users are strongly advised to review and understand the code before using it in any environment. See the [LICENSE](LICENSE) file for warranty disclaimers and limitations of liability.
+> **AI-Generated Code Disclaimer**: AI was heavily used in the creation of this project. While the sources have been reviewed and tested, users are strongly advised to review and understand the code themselves before using this project.
 
 ## Purpose
 
