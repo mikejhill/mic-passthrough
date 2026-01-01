@@ -403,9 +403,11 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 ### Dependencies
 
 This project uses the following open-source libraries (all MIT licensed):
-- **NAudio** - Audio I/O library ([github.com/naudio/NAudio](https://github.com/naudio/NAudio))
-- **System.CommandLine** - CLI argument parsing ([github.com/dotnet/command-line-api](https://github.com/dotnet/command-line-api))
-- **Microsoft.Extensions.Logging** - Logging framework ([github.com/dotnet/runtime](https://github.com/dotnet/runtime))
+- **NAudio** 2.2.1 - Audio I/O library ([github.com/naudio/NAudio](https://github.com/naudio/NAudio))
+- **System.CommandLine** 2.0.0-beta4 - CLI argument parsing ([github.com/dotnet/command-line-api](https://github.com/dotnet/command-line-api))
+- **Microsoft.Extensions.Logging** 9.0.0 - Logging framework ([github.com/dotnet/runtime](https://github.com/dotnet/runtime))
+- **Microsoft.Extensions.Logging.Console** 9.0.0 - Console log output ([github.com/dotnet/runtime](https://github.com/dotnet/runtime))
+- **System.Drawing.Common** 8.0.0 - Icon and graphics support for system tray UI ([github.com/dotnet/runtime](https://github.com/dotnet/runtime))
 
 ## See Also
 
