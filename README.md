@@ -37,13 +37,23 @@ See [Microsoft Answers: Microphone volume in Phone Link has gone (almost) quiet]
 
 #### Install .NET 10 SDK
 
+**Option 1: Using winget (Recommended)**
+
+```powershell
+winget install --id "Microsoft.Dotnet.SDK.10"
+```
+
+**Option 2: Manual Installation**
+
 1. **Download** the .NET 10 SDK from [dotnet.microsoft.com](https://dotnet.microsoft.com/download/dotnet/10.0)
 2. **Install** the x64 or x86 installer (x64 recommended for most systems)
-3. **Verify** installation:
-   ```powershell
-   dotnet --version
-   ```
-   Should output `10.0.x` or higher
+
+**Verify Installation:**
+
+```powershell
+dotnet --version
+```
+Should output `10.0.x` or higher
 
 #### Install VB-Audio Virtual Cable
 
