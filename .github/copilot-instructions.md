@@ -224,6 +224,43 @@ dotnet test
 
 ## Git Commit Guidelines
 
+### Verify Changes Before Committing
+
+**CRITICAL: Always check what's actually changing before writing commit messages.**
+
+Before committing:
+1. Run `git status` to see which files changed
+2. Run `git diff` to see the actual changes
+3. Review the line count: `git diff --stat` shows insertions/deletions
+4. Write commit message that accurately reflects those changes ONLY
+
+Common mistakes to avoid:
+- ❌ Writing multi-point commit messages for single-line changes (except when justified)
+- ❌ Describing features that aren't actually being added
+- ❌ Exaggerating the scope of small changes
+- ✅ Match message complexity to actual change size
+- ✅ Be concise and accurate about what changed
+
+Examples:
+```bash
+# BAD: 1 line changed, but message lists 4 bullet points
+git commit -m "feat: Add daemon mode section
+- Add daemon mode documentation
+- Include system tray features  
+- Link to detailed documentation
+- Highlight professional features"
+
+# GOOD: Accurate for a 1-line change
+git commit -m "docs: Simplify AI disclaimer wording"
+
+# BAD: Says "implement X" when only updating docs
+git commit -m "feat: Implement session tracking and add comprehensive docs"
+
+# GOOD: Separate commits for code vs docs
+git commit -m "feat: Implement session tracking"
+git commit -m "docs: Document session tracking feature"
+```
+
 ### Commit Granularity
 
 **Every commit must be isolated to a single logical change.** This ensures:
