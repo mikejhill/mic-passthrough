@@ -404,12 +404,12 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 This project uses the following open-source libraries (all MIT licensed):
 - **NAudio** - Audio I/O library ([github.com/naudio/NAudio](https://github.com/naudio/NAudio))
-- **CommandLineParser** - CLI argument parsing ([github.com/commandlineparser/commandline](https://github.com/commandlineparser/commandline))
+- **System.CommandLine** - CLI argument parsing ([github.com/dotnet/command-line-api](https://github.com/dotnet/command-line-api))
 - **Microsoft.Extensions.Logging** - Logging framework ([github.com/dotnet/runtime](https://github.com/dotnet/runtime))
 
 ## See Also
 
 - [VB-Audio Virtual Cable](https://vb-audio.com/Cable/)
 - [NAudio Library](https://github.com/naudio/NAudio)
-- [CommandLineParser](https://github.com/commandlineparser/commandline)
+- [System.CommandLine](https://github.com/dotnet/command-line-api)
 - [Windows WASAPI Documentation](https://docs.microsoft.com/en-us/windows/win32/coreaudio/wasapi)

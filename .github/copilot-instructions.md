@@ -564,7 +564,7 @@ The following files should be reviewed/updated when making relevant changes:
 
 - **NAudio Docs:** https://github.com/naudio/NAudio
 - **WASAPI Documentation:** https://learn.microsoft.com/en-us/windows/win32/coreaudio/wasapi
-- **CommandLineParser:** https://github.com/commandlineparser/commandline
+- **System.CommandLine:** https://github.com/dotnet/command-line-api
 - **Keep a Changelog:** https://keepachangelog.com/
 - **Semantic Versioning:** https://semver.org/
 - **MADR (ADR Format):** https://adr.github.io/madr/

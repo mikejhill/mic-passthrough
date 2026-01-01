@@ -7,7 +7,7 @@ This document describes how to run the test suite for the Microphone Passthrough
 The project includes **15 tests** organized into three categories:
 
 ### 1. CLI Argument Parsing Tests (6 tests) ✅ Always Run
-These validate command-line argument parsing with the CommandLineParser library:
+These validate command-line argument parsing with System.CommandLine:
 - Help flag (`--help`)
 - Version flag (`--version`)
 - List devices flag (`--list-devices`)
@@ -173,7 +173,7 @@ This means all hardware tests passed ✅
 Tests use:
 - **xUnit** for test framework
 - **Moq** for mocking dependencies
-- **CommandLineParser** validation integrated with real CLI parsing
+- **System.CommandLine** validation integrated with real CLI parsing
 - **NAudio** WASAPI access for real device enumeration
 
 Unit tests mock AudioDeviceManager dependencies, while integration tests use real WASAPI for authentic testing on your hardware.
