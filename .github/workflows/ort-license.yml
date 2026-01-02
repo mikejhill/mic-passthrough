@@ -8,9 +8,6 @@ jobs:
     runs-on: ubuntu-latest
     name: ORT License Compliance
     steps:
-    - name: Use HTTPS instead of SSH for Git cloning
-      run: git config --global url.https://github.com/.insteadOf ssh://git@github.com/
-
     - name: Checkout project
       uses: actions/checkout@v4
 
@@ -18,7 +15,7 @@ jobs:
       uses: oss-review-toolkit/ort-ci-github-action@v1
       with:
         project-path: ${{ github.workspace }}
-        ort-cli-evaluate-args: "-r /github/workspace/.ort/policy/rules.kts"
+        ort-cli-evaluate-args: "-r ${{ github.workspace }}/.ort/policy/rules.kts"
         report-formats: 'CycloneDx,SpdxDocument,WebApp'
         fail-on: 'violations'
 
