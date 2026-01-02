@@ -17,8 +17,8 @@ This file provides guidelines for GitHub Copilot when generating code and docume
 ```
 MicPassthrough/
 ├── .github/
-│   └── workflows/              # GitHub Actions CI/CD
-│       ├── ci.yml              # Runs on push/PR
+│   └── workflows/               # GitHub Actions CI/CD
+│       ├── ci.yml               # Runs on push/PR
 │       └── release.yml          # Runs on version tags (v*.*.*)
 ├── src/
 │   ├── MicPassthrough/          # Main application
@@ -51,7 +51,7 @@ MicPassthrough/
 │   ├── architecture/
 │   │   └── refactoring.md       # Architecture decisions & history
 │   ├── adr/
-│   │   └── template.md           # ADR template (MADR format)
+│   │   └── template.md          # ADR template (MADR format)
 │   └── assets/
 ├── README.md                    # Main project documentation
 ├── CHANGELOG.md                 # Release history (Keep a Changelog format)
@@ -242,8 +242,8 @@ Before committing:
 1. Run `git status` to see which files changed
 2. Run `git diff` to see the actual changes
 3. Review the line count: `git diff --stat` shows insertions/deletions
-4. Add only the relevant to the commit (`git add <files>`)
-5. Ensure unrelated changes are NOT staged
+4. Add only the relevant hunks to the commit (for full files: `git add <files>`; for specific hunks: `git diff > /tmp/patch ; (modify) ; git apply --cached /tmp/patch`)
+5. Ensure unrelated changes and hunks are NOT staged
 6. Write commit message that accurately reflects those changes ONLY
 
 Common mistakes to avoid:
@@ -280,6 +280,15 @@ git commit -m "docs: Document session tracking feature"
 - Easy rollback of specific features or fixes
 - Better code review experience
 - Clean separation of concerns
+
+### Commit Message Capitalization
+
+**Always capitalize the first letter after the commit type:**
+- ✅ `feat: Add auto-switch microphone detection`
+- ✅ `fix: Handle device disconnection`
+- ✅ `docs: Document testing procedures`
+- ❌ `feat: add auto-switch microphone detection`
+- ❌ `fix: handle device disconnection`
 
 ### Commit Types and Examples
 
@@ -352,7 +361,7 @@ git commit -m "docs: Remove temporary summary files"
 ### Commit Message Format
 
 ```
-<type>: <subject>
+<type>: <Subject>
 
 <body>
 
@@ -360,7 +369,9 @@ git commit -m "docs: Remove temporary summary files"
 ```
 
 - **Type:** feat, fix, docs, refactor, chore, test
-- **Subject:** Present tense, max 50 chars, lowercase
+- **Subject:** Imperative mood (present tense), starts with **capital letter**, max 50 chars
+  - ✅ Good: `feat: Add anti-aliasing`, `fix: Handle device disconnection`
+  - ❌ Bad: `feat: add anti-aliasing`, `fix: handle device disconnection`
 - **Body:** Optional but recommended for complex changes
   - Explain what and why, not how
   - Wrap at 72 characters
@@ -420,7 +431,7 @@ Related-to: #38"
    - Release workflow triggers on tag push
    - Extracts version from tag name (vX.Y.Z → X.Y.Z)
    - Builds Release configuration
-   - Runs all 15 tests
+   - Runs all non-hardware tests
    - Creates GitHub Release with pre-filled notes
    - Uploads MicPassthrough.exe as downloadable asset
 
@@ -437,7 +448,7 @@ See [docs/QUICK_RELEASE.md](../docs/QUICK_RELEASE.md) for checklist.
 2. Setup .NET 10.0 SDK
 3. Restore NuGet packages
 4. Build in Release configuration
-5. Run 11 unit tests (skip hardware tests)
+5. Run unit tests (skip hardware tests)
 6. Upload artifacts
 
 **Hardware tests skipped:** `RUN_HARDWARE_TESTS` not set in CI
@@ -452,7 +463,7 @@ See [docs/QUICK_RELEASE.md](../docs/QUICK_RELEASE.md) for checklist.
 3. Setup .NET 10.0 SDK
 4. Restore NuGet packages
 5. Build in Release configuration
-6. Run all 15 tests (includes hardware integration tests)
+6. Run all non-hardware tests
 7. Publish self-contained .exe
 8. Create GitHub Release with:
    - Auto-populated description with installation instructions
