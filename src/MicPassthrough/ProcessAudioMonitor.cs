@@ -158,17 +158,17 @@ public class ProcessAudioMonitor
             
             try
             {
-                var enumerator = new MMDeviceEnumerator();
-                
-                // Check physical microphone device
-                CheckDeviceForTargetSessions(enumerator, _deviceId, "Physical Mic", targetProcessIds, currentTargetSessions);
-                
-                // Also check cable capture device if provided
-                if (!string.IsNullOrEmpty(_cableDeviceId))
+                using (var enumerator = new MMDeviceEnumerator())
                 {
-                    CheckDeviceForTargetSessions(enumerator, _cableDeviceId, "Cable Capture", targetProcessIds, currentTargetSessions);
+                    // Check physical microphone device
+                    CheckDeviceForTargetSessions(enumerator, _deviceId, "Physical Mic", targetProcessIds, currentTargetSessions);
+                    
+                    // Also check cable capture device if provided
+                    if (!string.IsNullOrEmpty(_cableDeviceId))
+                    {
+                        CheckDeviceForTargetSessions(enumerator, _cableDeviceId, "Cable Capture", targetProcessIds, currentTargetSessions);
+                    }
                 }
-
 
                 // Detect target session changes
                 var newSessions = currentTargetSessions.Except(_lastSeenTargetSessions).ToList();

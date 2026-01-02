@@ -32,91 +32,92 @@ public class WindowsDefaultMicrophoneManager
     {
         try
         {
-            var enumerator = new MMDeviceEnumerator();
-            
-            // Save the current Windows default microphone so we can restore it later
-            // Try different roles to find the actual default
-            try
+            using (var enumerator = new MMDeviceEnumerator())
             {
-                MMDevice currentDefault = null;
-                string foundVia = "";
-                
-                // Try Console role first (most common for user input devices)
+                // Save the current Windows default microphone so we can restore it later
+                // Try different roles to find the actual default
                 try
                 {
-                    currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
-                    foundVia = "Console role";
-                }
-                catch { }
-                
-                // If Console role didn't work, try Multimedia
-                if (currentDefault == null)
-                {
+                    MMDevice currentDefault = null;
+                    string foundVia = "";
+                    
+                    // Try Console role first (most common for user input devices)
                     try
                     {
-                        currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia);
-                        foundVia = "Multimedia role";
+                        currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
+                        foundVia = "Console role";
                     }
                     catch { }
-                }
-                
-                // Last resort: Communications role
-                if (currentDefault == null)
-                {
-                    try
+                    
+                    // If Console role didn't work, try Multimedia
+                    if (currentDefault == null)
                     {
-                        currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
-                        foundVia = "Communications role";
+                        try
+                        {
+                            currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia);
+                            foundVia = "Multimedia role";
+                        }
+                        catch { }
                     }
-                    catch { }
+                    
+                    // Last resort: Communications role
+                    if (currentDefault == null)
+                    {
+                        try
+                        {
+                            currentDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+                            foundVia = "Communications role";
+                        }
+                        catch { }
+                    }
+                    
+                    if (currentDefault != null)
+                    {
+                        _originalDefaultMicId = currentDefault.ID;
+                        _logger.LogInformation("Saved original default microphone ({FoundVia}): {Device} (ID: {DeviceId})", 
+                            foundVia, currentDefault.FriendlyName, currentDefault.ID);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Could not determine Windows default microphone using any role");
+                    }
                 }
-                
-                if (currentDefault != null)
+                catch (Exception ex)
                 {
-                    _originalDefaultMicId = currentDefault.ID;
-                    _logger.LogInformation("Saved original default microphone ({FoundVia}): {Device} (ID: {DeviceId})", 
-                        foundVia, currentDefault.FriendlyName, currentDefault.ID);
+                    _logger.LogWarning(ex, "Could not retrieve original default microphone");
                 }
-                else
+
+                // Get the target device
+                MMDevice targetDevice = null;
+                try
                 {
-                    _logger.LogWarning("Could not determine Windows default microphone using any role");
+                    targetDevice = enumerator.GetDevice(deviceId);
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not retrieve original default microphone");
-            }
+                catch
+                {
+                    _logger.LogError("Could not find device with ID: {DeviceId}", deviceId);
+                    return false;
+                }
 
-            // Get the target device
-            MMDevice targetDevice;
-            try
-            {
-                targetDevice = enumerator.GetDevice(deviceId);
-            }
-            catch
-            {
-                _logger.LogError("Could not find device with ID: {DeviceId}", deviceId);
-                return false;
-            }
+                if (targetDevice == null)
+                {
+                    _logger.LogError("Target microphone device not found: {DeviceId}", deviceId);
+                    return false;
+                }
 
-            if (targetDevice == null)
-            {
-                _logger.LogError("Target microphone device not found: {DeviceId}", deviceId);
-                return false;
-            }
-
-            // Set as default using Windows Registry
-            // This is the most reliable method for Windows 10/11
-            try
-            {
-                SetDeviceAsDefault(targetDevice.ID);
-                _logger.LogInformation("Set default microphone to: {Device}", targetDevice.FriendlyName);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to set default microphone");
-                return false;
+                // Set as default using Windows Registry
+                // This is the most reliable method for Windows 10/11
+                try
+                {
+                    SetDeviceAsDefault(targetDevice.ID);
+                    _logger.LogInformation("Set default microphone to: {Device}", targetDevice.FriendlyName);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to set default microphone");
+                    return false;
+                }
             }
         }
         catch (Exception ex)
@@ -144,10 +145,12 @@ public class WindowsDefaultMicrophoneManager
             _logger.LogInformation("Restoring original default microphone (ID: {OriginalId})", _originalDefaultMicId);
             SetDeviceAsDefault(_originalDefaultMicId);
             
-            var enumerator = new MMDeviceEnumerator();
-            var originalDevice = enumerator.GetDevice(_originalDefaultMicId);
-            _logger.LogInformation("Restored original default microphone: {Device}", 
-                originalDevice?.FriendlyName ?? _originalDefaultMicId);
+            using (var enumerator = new MMDeviceEnumerator())
+            {
+                var originalDevice = enumerator.GetDevice(_originalDefaultMicId);
+                _logger.LogInformation("Restored original default microphone: {Device}", 
+                    originalDevice?.FriendlyName ?? _originalDefaultMicId);
+            }
             
             return true;
         }
@@ -166,9 +169,11 @@ public class WindowsDefaultMicrophoneManager
     {
         try
         {
-            var enumerator = new MMDeviceEnumerator();
-            var defaultDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
-            return defaultDevice?.FriendlyName;
+            using (var enumerator = new MMDeviceEnumerator())
+            {
+                var defaultDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+                return defaultDevice?.FriendlyName;
+            }
         }
         catch (Exception ex)
         {
