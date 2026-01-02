@@ -1,0 +1,31 @@
+name: ORT License Compliance
+
+on:
+  workflow_call:
+
+jobs:
+  ort-license:
+    runs-on: ubuntu-latest
+    name: ORT License Compliance
+    steps:
+    - name: Use HTTPS instead of SSH for Git cloning
+      run: git config --global url.https://github.com/.insteadOf ssh://git@github.com/
+
+    - name: Checkout project
+      uses: actions/checkout@v4
+
+    - name: Run ORT (analyze, evaluate, report)
+      uses: oss-review-toolkit/ort-ci-github-action@v1
+      with:
+        project-path: ${{ github.workspace }}
+        ort-cli-evaluate-args: "-r /github/workspace/.ort/policy/rules.kts"
+        report-formats: 'CycloneDx,SpdxDocument,WebApp'
+        fail-on: 'violations'
+
+    - name: Upload ORT Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: ort-results
+        path: .ort/ort-results/**/*
+        retention-days: 30

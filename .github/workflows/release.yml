@@ -6,8 +6,12 @@ on:
       - 'v*'  # Triggers on tags like v1.0.0, v1.0.1, etc.
 
 jobs:
+  license-compliance:
+    uses: ./.github/workflows/ort-license.yml
+
   release:
     runs-on: windows-latest
+    needs: license-compliance
     name: Build and Release
 
     steps:
