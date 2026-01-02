@@ -7,10 +7,11 @@ using System.Linq;
 /// <summary>
 /// Manages audio device enumeration and discovery for the passthrough application.
 /// </summary>
-public class AudioDeviceManager
+public class AudioDeviceManager : IDisposable
 {
     private readonly ILogger _logger;
     private readonly MMDeviceEnumerator _enumerator;
+    private bool _disposed;
 
     /// <summary>
     /// Creates a new instance of AudioDeviceManager.
@@ -81,5 +82,16 @@ public class AudioDeviceManager
             Console.WriteLine($"  {device.FriendlyName}");
         }
         Console.WriteLine("\nTip: Use --list-devices to see all device names");
+    }
+
+    /// <summary>
+    /// Releases the MMDeviceEnumerator COM object.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+
+        _enumerator?.Dispose();
+        _disposed = true;
     }
 }

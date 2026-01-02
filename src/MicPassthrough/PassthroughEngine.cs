@@ -25,6 +25,9 @@ class PassthroughEngine
     // Statistics
     private long _totalBytesProcessed;
     private int _frameCount;
+    
+    // Event handler reference for proper cleanup
+    private EventHandler<WaveInEventArgs> _dataAvailableHandler;
 
     /// <summary>
     /// Creates a new instance of PassthroughEngine.
@@ -102,6 +105,13 @@ class PassthroughEngine
     public void Dispose()
     {
         _logger.LogDebug("Disposing resources");
+        
+        // Unsubscribe from event handler to prevent memory leak
+        if (_capture != null && _dataAvailableHandler != null)
+        {
+            _capture.DataAvailable -= _dataAvailableHandler;
+        }
+        
         _cableOut?.Dispose();
         _monitorOut?.Dispose();
         _capture?.Dispose();
@@ -195,7 +205,8 @@ class PassthroughEngine
         bool playbackStarted = false;
         int prebufferRemaining = _prebufferFrames;
 
-        _capture.DataAvailable += (s, e) =>
+        // Store event handler reference to allow proper cleanup on dispose
+        _dataAvailableHandler = (s, e) =>
         {
             _frameCount++;
             _totalBytesProcessed += e.BytesRecorded;
@@ -232,5 +243,7 @@ class PassthroughEngine
                     _frameCount, _totalBytesProcessed, seconds, _cableBuffer.BufferedDuration.TotalMilliseconds);
             }
         };
+        
+        _capture.DataAvailable += _dataAvailableHandler;
     }
 }

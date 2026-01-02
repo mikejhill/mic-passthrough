@@ -195,6 +195,12 @@ public class SystemTrayUI : IDisposable
     {
         if (_disposed) return;
 
+        // Unsubscribe from all event handlers to prevent memory leaks
+        if (_trayIcon != null)
+        {
+            _trayIcon.DoubleClick -= OnTrayIconDoubleClick;
+        }
+        
         _trayIcon?.Dispose();
         _contextMenu?.Dispose();
         _disposed = true;
