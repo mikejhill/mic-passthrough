@@ -242,7 +242,10 @@ Before committing:
 1. Run `git status` to see which files changed
 2. Run `git diff` to see the actual changes
 3. Review the line count: `git diff --stat` shows insertions/deletions
-4. Add only the relevant hunks to the commit (for full files: `git add <files>`; for specific hunks: `git diff > /tmp/patch ; (modify /tmp/patch) ; git apply --cached /tmp/patch`)
+4. Add only the relevant hunks to the commit
+   - **Never use `git add -A` or `git commit -a`**
+   - For full files, first use `git diff` to verify all changes are related, then run `git add <files>`
+   - For specific hunks: `git diff > /tmp/patch ; (modify /tmp/patch) ; git apply --cached /tmp/patch`
 5. Ensure unrelated changes and hunks are NOT staged
 6. Write commit message that accurately reflects those changes ONLY
 
