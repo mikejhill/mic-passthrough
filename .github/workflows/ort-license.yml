@@ -17,6 +17,7 @@ jobs:
         project-path: ${{ github.workspace }}
         ort-config-repository: https://github.com/oss-review-toolkit/ort-config.git
         ort-config-revision: main
+        ort-cli-evaluate-args: "-r ${{ github.workspace }}/.ort/policy/rules.kts"
         report-formats: 'CycloneDx,SpdxDocument,WebApp'
         fail-on: 'violations'
 
