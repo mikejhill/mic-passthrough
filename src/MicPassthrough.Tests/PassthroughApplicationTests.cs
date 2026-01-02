@@ -103,19 +103,17 @@ namespace MicPassthrough.Tests
                 Verbose = true
             };
 
-            // Act & Assert - The run method should complete without throwing
+            // Act & Assert - Should fail if devices aren't available
             try
             {
                 var exitCode = app.Run(options);
-                Assert.True(exitCode == 0 || exitCode != 0, "Application ran without crashing");
+                // If devices exist and passthrough runs, that's success
+                Assert.Equal(0, exitCode);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex.Message.Contains("not found"))
             {
-                // Expected if audio devices aren't properly configured
-                Assert.True(ex.Message.Contains("not found") || 
-                           ex.Message.Contains("WASAPI") ||
-                           ex.Message.Contains("not available"),
-                    $"Device initialization failed as expected: {ex.Message}");
+                // Devices not found - this is a real failure, not expected
+                Assert.Fail($"Required audio devices not found: {ex.Message}. Install VB-Audio Virtual Cable or skip this test.");
             }
         }
 
@@ -161,16 +159,16 @@ namespace MicPassthrough.Tests
             try
             {
                 var exitCode = app.Run(options);
-                Assert.True(exitCode >= 0, "Application should complete or handle errors gracefully");
+                // Passthrough should run successfully
+                Assert.Equal(0, exitCode);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex.Message.Contains("not found"))
             {
-                // Document what went wrong for debugging
-                Assert.True(
-                    ex.Message.Contains("not found") ||
-                    ex.Message.Contains("already in use") ||
-                    ex.Message.Contains("WASAPI"),
-                    $"Audio routing test failed - check prerequisites: {ex.Message}");
+                Assert.Fail($"Required audio devices not found: {ex.Message}. Install VB-Audio Virtual Cable or skip this test.");
+            }
+            catch (Exception ex) when (ex.Message.Contains("already in use") || ex.Message.Contains("exclusive"))
+            {
+                Assert.Fail($"Device is in exclusive use by another application: {ex.Message}. Close other audio apps and retry.");
             }
         }
     }

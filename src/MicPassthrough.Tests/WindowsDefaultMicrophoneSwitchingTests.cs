@@ -33,8 +33,7 @@ namespace MicPassthrough.Tests
             
             if (devices.Count < 2)
             {
-                logger.LogWarning("Test skipped: Need at least 2 recording devices to test switching");
-                return;
+                Assert.Fail($"Need at least 2 recording devices to test switching, but only found {devices.Count}. Install VB-Audio Virtual Cable or additional audio devices.");
             }
 
             // Get original default device
@@ -43,18 +42,16 @@ namespace MicPassthrough.Tests
             {
                 originalDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
             }
-            catch
+            catch (Exception ex)
             {
-                logger.LogWarning("Test skipped: No default recording device configured");
-                return;
+                Assert.Fail($"No default recording device configured: {ex.Message}");
             }
 
             // Find a different device to switch to
             var targetDevice = devices.FirstOrDefault(d => d.ID != originalDefault.ID);
             if (targetDevice == null)
             {
-                logger.LogWarning("Test skipped: Could not find a different device to switch to");
-                return;
+                Assert.Fail($"Could not find a different device to switch to. Only device: {originalDefault.FriendlyName}");
             }
 
             logger.LogInformation("Original default: {Original}", originalDefault.FriendlyName);
@@ -112,8 +109,7 @@ namespace MicPassthrough.Tests
             
             if (devices.Count < 2)
             {
-                logger.LogWarning("Test skipped: Need at least 2 recording devices");
-                return;
+                Assert.Fail($"Need at least 2 recording devices, but only found {devices.Count}. Install VB-Audio Virtual Cable or additional audio devices.");
             }
 
             MMDevice originalDefault = null;
@@ -121,17 +117,15 @@ namespace MicPassthrough.Tests
             {
                 originalDefault = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
             }
-            catch
+            catch (Exception ex)
             {
-                logger.LogWarning("Test skipped: No default recording device configured");
-                return;
+                Assert.Fail($"No default recording device configured: {ex.Message}");
             }
 
             var targetDevice = devices.FirstOrDefault(d => d.ID != originalDefault.ID);
             if (targetDevice == null)
             {
-                logger.LogWarning("Test skipped: Could not find a different device");
-                return;
+                Assert.Fail($"Could not find a different device to switch to. Only device: {originalDefault.FriendlyName}");
             }
 
             try
@@ -176,7 +170,7 @@ namespace MicPassthrough.Tests
             
             if (devices.Count == 0)
             {
-                return; // Skip if no devices
+                Assert.Fail("No audio capture devices available. Install audio devices or VB-Audio Virtual Cable.");
             }
 
             var testDevice = devices.First();
