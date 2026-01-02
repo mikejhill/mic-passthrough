@@ -107,7 +107,7 @@ public class PassthroughApplication
 
     /// <summary>
     /// Runs automatic smart passthrough mode where passthrough activates only when calls are detected.
-    /// Monitors when PhoneLink or other applications use the microphone and:
+    /// Monitors when the configured application uses the microphone and:
     /// 1. Automatically starts passthrough
     /// 2. Switches Windows default microphone to CABLE Output
     /// 3. Monitors for when the application releases the microphone
@@ -126,9 +126,9 @@ public class PassthroughApplication
         var cableCaptureDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Capture, options.CableCapture);
         
         // Create monitor that checks BOTH the physical mic AND cable capture device
-        // This allows detecting if Phone Link switches between devices during the call handoff
+        // This allows detecting if the monitored app switches between devices during the call handoff
         string cableCaptureDeviceId = cableCaptureDevice?.ID ?? null;
-        var monitor = new ProcessAudioMonitor(_logger, micDevice.ID, cableCaptureDeviceId);
+        var monitor = new ProcessAudioMonitor(_logger, micDevice.ID, cableCaptureDeviceId, options.TargetProcessName);
         var micManager = new WindowsDefaultMicrophoneManager(_logger);
         // CABLE Input is a Render device (output), not Capture
         var cableDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Render, options.CableRender);

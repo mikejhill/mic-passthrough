@@ -6,7 +6,7 @@ using MicPassthrough;
 
 /// <summary>
 /// Manages switching Windows' default microphone device.
-/// Allows changing which microphone Windows and applications (like Phone Link) use as the default input device.
+/// Allows changing which microphone Windows and applications use as the default input device.
 /// </summary>
 public class WindowsDefaultMicrophoneManager
 {
@@ -197,7 +197,7 @@ public class WindowsDefaultMicrophoneManager
             // Set as default for Console role (most applications)
             bool consoleSuccess = PolicyConfigClient.SetDefaultDevice(deviceId, ERole.eConsole);
             
-            // Set as default for Communications role (VoIP apps like Phone Link)
+            // Set as default for Communications role (VoIP apps)
             bool commSuccess = PolicyConfigClient.SetDefaultDevice(deviceId, ERole.eCommunications);
             
             // Set as default for Multimedia role (media playback apps)

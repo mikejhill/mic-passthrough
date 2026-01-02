@@ -22,6 +22,7 @@ namespace MicPassthrough.Tests
             Assert.False(options.ListDevices);
             Assert.False(options.Verbose);
             Assert.False(options.AutoSwitch);
+            Assert.Equal("PhoneExperienceHost", options.TargetProcessName);
         }
 
         [Fact]
@@ -57,6 +58,13 @@ namespace MicPassthrough.Tests
         {
             var options = new Options { Verbose = true };
             Assert.True(options.Verbose);
+        }
+
+        [Fact]
+        public void Options_CanSetTargetProcessName()
+        {
+            var options = new Options { TargetProcessName = "Skype" };
+            Assert.Equal("Skype", options.TargetProcessName);
         }
     }
 }

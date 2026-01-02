@@ -61,12 +61,17 @@ public class Options
     public bool Verbose { get; set; }
 
     /// <summary>
-    /// Enable automatic passthrough control based on call activity detection.
-    /// When enabled, passthrough activates only when PhoneLink (or other apps) 
-    /// actively use the microphone, and automatically switches Windows default microphone
-    /// between the user's physical microphone and CABLE Output.
+    /// Enable automatic passthrough control based on call/activity detection.
+    /// When enabled, passthrough activates only when the monitored application uses the microphone,
+    /// and automatically switches Windows default microphone between the user's physical microphone and CABLE Output.
     /// </summary>
     public bool AutoSwitch { get; set; }
+
+    /// <summary>
+    /// Process name to monitor for auto-switch detection (without .exe extension).
+    /// Default targets PhoneExperienceHost.
+    /// </summary>
+    public string TargetProcessName { get; set; } = "PhoneExperienceHost";
 
     /// <summary>
     /// Run in daemon mode with system tray indicator.

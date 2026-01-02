@@ -8,31 +8,32 @@ using System.Threading;
 using System.Threading.Tasks;
 
 /// <summary>
-/// Monitors whether specific processes (like PhoneLink) are actively using specified audio devices.
+/// Monitors whether a target process is actively using specified audio devices.
 /// Uses Windows Core Audio APIs to detect when applications open and close microphone sessions.
-/// Tracks specific process IDs to differentiate between Phone Link and other applications.
-/// Monitors both the physical microphone and cable capture device to detect calls.
+/// Monitors both the physical microphone and cable capture device to detect activity.
 /// </summary>
 public class ProcessAudioMonitor
 {
     private readonly ILogger _logger;
     private readonly string _deviceId;  // Physical microphone device
     private readonly string _cableDeviceId;  // Cable capture device (optional)
+    private readonly string _targetProcessName;
     private volatile bool _isDeviceInUse;
     private int _ourProcessId;
-    private HashSet<int> _trackedPhoneLinkProcessIds = new HashSet<int>();
-    private HashSet<int> _lastSeenPhoneLinkSessions = new HashSet<int>();
-    private long _lastPhoneLinkSessionTicks;  // Track when we last saw a Phone Link session
+    private HashSet<int> _trackedProcessIds = new HashSet<int>();
+    private HashSet<int> _lastSeenTargetSessions = new HashSet<int>();
+    private long _lastTargetSessionTicks;  // Track when we last saw a target session
+    private readonly string[] _defaultSessionKeywords = new[] { "phone", "call", "experience" };
     
     /// <summary>
-    /// Grace period (in milliseconds) to wait after Phone Link sessions disappear before declaring the call ended.
+    /// Grace period (in milliseconds) to wait after target sessions disappear before declaring the call ended.
     /// 
     /// Currently set to 0 (disabled) because dual-device monitoring eliminates the need for it.
-    /// Phone Link can now be reliably detected on either the physical microphone or cable capture device
+    /// The target process can be detected on either the physical microphone or cable capture device
     /// without interruption from switching the default microphone device.
     /// 
     /// Kept as a constant for future use in case edge cases are discovered during testing 
-    /// (e.g., if Phone Link briefly loses all audio sessions during complex call scenarios).
+    /// (e.g., if an app briefly loses all audio sessions during complex call scenarios).
     /// If re-enabled, a value of 500ms was the previous sweet spot.
     /// </summary>
     private const long GRACE_PERIOD_MS = 0;
@@ -42,26 +43,28 @@ public class ProcessAudioMonitor
     /// </summary>
     /// <param name="logger">Logger instance.</param>
     /// <param name="deviceId">Device ID to monitor (physical microphone).</param>
-    /// <param name="cableDeviceId">Optional device ID for cable capture (CABLE Output device). Used to detect if Phone Link switched to cable.</param>
-    public ProcessAudioMonitor(ILogger logger, string deviceId, string cableDeviceId = null)
+    /// <param name="cableDeviceId">Optional device ID for cable capture (CABLE Output device).</param>
+    /// <param name="targetProcessName">Process name (without .exe) to monitor for audio sessions.</param>
+    public ProcessAudioMonitor(ILogger logger, string deviceId, string cableDeviceId = null, string targetProcessName = "PhoneExperienceHost")
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _deviceId = deviceId ?? throw new ArgumentNullException(nameof(deviceId));
         _cableDeviceId = cableDeviceId;  // May be null
+        _targetProcessName = string.IsNullOrWhiteSpace(targetProcessName) ? "PhoneExperienceHost" : targetProcessName;
         _isDeviceInUse = false;
-        _lastPhoneLinkSessionTicks = 0;
+        _lastTargetSessionTicks = 0;
         // Store our own process ID so we can exclude our sessions
         _ourProcessId = Process.GetCurrentProcess().Id;
         _logger.LogDebug("ProcessAudioMonitor initialized (our process ID: {ProcessId})", _ourProcessId);
     }
 
     /// <summary>
-    /// Gets whether the monitored device is currently in use by Phone Link.
+    /// Gets whether the monitored device is currently in use by the target process.
     /// </summary>
     public bool IsDeviceInUse => _isDeviceInUse;
 
     /// <summary>
-    /// Starts monitoring the device for Phone Link activity.
+    /// Starts monitoring the device for target process activity.
     /// Runs on a background thread, checking at regular intervals.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token to stop monitoring.</param>
@@ -73,8 +76,8 @@ public class ProcessAudioMonitor
 
     /// <summary>
     /// Monitors device usage on a background thread.
-    /// Checks every 500ms if Phone Link is actively using the device.
-    /// Tracks sessions and detects when Phone Link releases the microphone.
+    /// Checks every 500ms if the target process is actively using the device.
+    /// Tracks sessions and detects when the process releases the microphone.
     /// </summary>
     private void MonitorDeviceUsage(CancellationToken cancellationToken)
     {
@@ -92,11 +95,11 @@ public class ProcessAudioMonitor
                     // Log state changes
                     if (wasDeviceInUse && !_isDeviceInUse)
                     {
-                        _logger.LogInformation("Phone Link released the microphone");
+                        _logger.LogInformation("Target application released the microphone");
                     }
                     else if (!wasDeviceInUse && _isDeviceInUse)
                     {
-                        _logger.LogInformation("Phone Link is actively using the microphone");
+                        _logger.LogInformation("Target application is actively using the microphone");
                     }
 
                     Thread.Sleep(500); // Check twice per second
@@ -115,105 +118,106 @@ public class ProcessAudioMonitor
     }
 
     /// <summary>
-    /// Checks if Phone Link is actively using the monitored devices.
+    /// Checks if the target process is actively using the monitored devices.
     /// Uses a multi-stage detection process:
-    /// 1. Find PhoneExperienceHost process IDs (Phone Link app running)
+    /// 1. Find the configured process IDs
     /// 2. Scan audio sessions on BOTH the physical mic AND cable capture device
-    /// 3. Track which sessions belong to Phone Link/Windows Runtime
+    /// 3. Track which sessions belong to the target process/Windows Runtime
     /// 4. Detect when those sessions are released or become inactive
     /// 5. Apply 500ms grace period before declaring call ended
     /// 
-    /// Monitors both devices because when we switch default mic to CABLE, Phone Link may
-    /// use either the original physical mic or the new CABLE device depending on timing.
+    /// Monitors both devices because the target app may use either the original physical mic
+    /// or the CABLE device depending on timing.
     /// 
     /// This prevents false positives from other applications using the microphone.
     /// </summary>
-    /// <returns>True if Phone Link is actively using either microphone device; false otherwise.</returns>
+    /// <returns>True if the target process is actively using either monitored device; false otherwise.</returns>
     private bool CheckDeviceUsage()
     {
         try
         {
-            // Get current Phone Link process IDs
-            var phoneExperienceProcesses = Process.GetProcessesByName("PhoneExperienceHost");
-            var phoneExperienceIds = new HashSet<int>(phoneExperienceProcesses.Select(p => p.Id));
+            // Get current target process IDs
+            var targetProcesses = Process.GetProcessesByName(_targetProcessName);
+            var targetProcessIds = new HashSet<int>(targetProcesses.Select(p => p.Id));
 
-            _logger.LogDebug("Phone Link process check: {Count} instance{S} running", 
-                phoneExperienceIds.Count, 
-                phoneExperienceIds.Count != 1 ? "s" : "");
+            _logger.LogDebug("Process check ({Process}): {Count} instance{S} running", 
+                _targetProcessName,
+                targetProcessIds.Count, 
+                targetProcessIds.Count != 1 ? "s" : "");
 
-            // Phone Link not running at all
-            if (phoneExperienceIds.Count == 0)
+            // Target not running at all
+            if (targetProcessIds.Count == 0)
             {
-                _lastSeenPhoneLinkSessions.Clear();
-                _lastPhoneLinkSessionTicks = 0;
+                _lastSeenTargetSessions.Clear();
+                _lastTargetSessionTicks = 0;
                 return false;
             }
 
-            // Phone Link is running - check for active sessions on BOTH devices
-            var currentPhoneLinkSessions = new HashSet<int>();
+            // Target is running - check for active sessions on BOTH devices
+            var currentTargetSessions = new HashSet<int>();
             
             try
             {
                 var enumerator = new MMDeviceEnumerator();
                 
                 // Check physical microphone device
-                CheckDeviceForPhoneLinkSessions(enumerator, _deviceId, "Physical Mic", phoneExperienceIds, currentPhoneLinkSessions);
+                CheckDeviceForTargetSessions(enumerator, _deviceId, "Physical Mic", targetProcessIds, currentTargetSessions);
                 
                 // Also check cable capture device if provided
                 if (!string.IsNullOrEmpty(_cableDeviceId))
                 {
-                    CheckDeviceForPhoneLinkSessions(enumerator, _cableDeviceId, "Cable Capture", phoneExperienceIds, currentPhoneLinkSessions);
+                    CheckDeviceForTargetSessions(enumerator, _cableDeviceId, "Cable Capture", targetProcessIds, currentTargetSessions);
                 }
 
 
-                // Detect Phone Link session changes
-                var newSessions = currentPhoneLinkSessions.Except(_lastSeenPhoneLinkSessions).ToList();
-                var endedSessions = _lastSeenPhoneLinkSessions.Except(currentPhoneLinkSessions).ToList();
+                // Detect target session changes
+                var newSessions = currentTargetSessions.Except(_lastSeenTargetSessions).ToList();
+                var endedSessions = _lastSeenTargetSessions.Except(currentTargetSessions).ToList();
 
                 if (newSessions.Count > 0)
                 {
-                    _logger.LogDebug("New Phone Link sessions: {Sessions}", string.Join(", ", newSessions));
+                    _logger.LogDebug("New target sessions: {Sessions}", string.Join(", ", newSessions));
                 }
                 if (endedSessions.Count > 0)
                 {
-                    _logger.LogDebug("Phone Link sessions ended: {Sessions}", string.Join(", ", endedSessions));
+                    _logger.LogDebug("Target sessions ended: {Sessions}", string.Join(", ", endedSessions));
                 }
 
-                _lastSeenPhoneLinkSessions = currentPhoneLinkSessions;
+                _lastSeenTargetSessions = currentTargetSessions;
 
-                // Phone Link is in use if it has any active sessions
-                if (currentPhoneLinkSessions.Count > 0)
+                // Target is in use if it has any active sessions
+                if (currentTargetSessions.Count > 0)
                 {
-                    // Update the timestamp - we just saw a Phone Link session
-                    _lastPhoneLinkSessionTicks = DateTime.UtcNow.Ticks;
-                    _logger.LogDebug("Phone Link detected: {SessionCount} active session{S}", 
-                        currentPhoneLinkSessions.Count,
-                        currentPhoneLinkSessions.Count != 1 ? "s" : "");
+                    // Update the timestamp - we just saw a target session
+                    _lastTargetSessionTicks = DateTime.UtcNow.Ticks;
+                    _logger.LogDebug("Target process detected: {SessionCount} active session{S}", 
+                        currentTargetSessions.Count,
+                        currentTargetSessions.Count != 1 ? "s" : "");
                     return true;
                 }
                 else
                 {
                     // No active sessions - check if we're still within grace period
-                    if (_lastPhoneLinkSessionTicks > 0)
+                    if (_lastTargetSessionTicks > 0)
                     {
-                        long elapsedMs = (DateTime.UtcNow.Ticks - _lastPhoneLinkSessionTicks) / TimeSpan.TicksPerMillisecond;
+                        long elapsedMs = (DateTime.UtcNow.Ticks - _lastTargetSessionTicks) / TimeSpan.TicksPerMillisecond;
                         if (elapsedMs < GRACE_PERIOD_MS)
                         {
-                            _logger.LogDebug("Phone Link sessions inactive, grace period active ({ElapsedMs}ms of {GracePeriodMs}ms)", elapsedMs, GRACE_PERIOD_MS);
+                            _logger.LogDebug("Target sessions inactive, grace period active ({ElapsedMs}ms of {GracePeriodMs}ms)", elapsedMs, GRACE_PERIOD_MS);
                             return true;  // Still consider call active during grace period
                         }
                     }
                     
-                    _logger.LogDebug("Phone Link sessions no longer active");
-                    _lastPhoneLinkSessionTicks = 0;
+                    _logger.LogDebug("Target sessions no longer active");
+                    _lastTargetSessionTicks = 0;
                     return false;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error checking audio sessions");
-                // If we can't check, assume Phone Link is using (safer for false negatives)
-                return currentPhoneLinkSessions.Count > 0;
+                // If we can't check, assume the target process is using (safer for false negatives)
+                return currentTargetSessions.Count > 0;
             }
         }
         catch (Exception ex)
@@ -224,10 +228,10 @@ public class ProcessAudioMonitor
     }
 
     /// <summary>
-    /// Checks a specific device for Phone Link sessions.
+    /// Checks a specific device for target sessions.
     /// </summary>
-    private void CheckDeviceForPhoneLinkSessions(MMDeviceEnumerator enumerator, string deviceId, string deviceLabel, 
-        HashSet<int> phoneExperienceIds, HashSet<int> currentPhoneLinkSessions)
+    private void CheckDeviceForTargetSessions(MMDeviceEnumerator enumerator, string deviceId, string deviceLabel, 
+        HashSet<int> targetProcessIds, HashSet<int> currentTargetSessions)
     {
         try
         {
@@ -282,23 +286,23 @@ public class ProcessAudioMonitor
                         continue;
                     }
 
-                    // Check if session belongs to Phone Link directly
-                    if (phoneExperienceIds.Contains((int)sessionPid))
+                    // Check if session belongs to target process directly
+                    if (targetProcessIds.Contains((int)sessionPid))
                     {
-                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] Phone Link process detected", deviceLabel, i);
-                        currentPhoneLinkSessions.Add(i);
+                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] Target process detected", deviceLabel, i);
+                        currentTargetSessions.Add(i);
                     }
-                    // Check DisplayName for Phone Link identifiers
-                    else if (IsPhoneLinkSession(displayName))
+                    // Check DisplayName for target identifiers
+                    else if (IsTargetSession(displayName))
                     {
-                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] Phone Link identified by DisplayName: '{DisplayName}'", deviceLabel, i, displayName);
-                        currentPhoneLinkSessions.Add(i);
+                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] Target identified by DisplayName: '{DisplayName}'", deviceLabel, i, displayName);
+                        currentTargetSessions.Add(i);
                     }
-                    // Check if session belongs to svchost (Windows Runtime host used by Phone Link)
-                    else if (IsServiceHostRelatedToPhoneLink((int)sessionPid, displayName))
+                    // Check if session belongs to svchost (Windows Runtime host used by the target app)
+                    else if (IsServiceHostRelatedToTarget((int)sessionPid, displayName))
                     {
-                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] Windows Runtime/svchost related to Phone Link", deviceLabel, i);
-                        currentPhoneLinkSessions.Add(i);
+                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] Windows Runtime/svchost related to target process", deviceLabel, i);
+                        currentTargetSessions.Add(i);
                     }
                     // Skip other applications' sessions
                     else
@@ -316,35 +320,34 @@ public class ProcessAudioMonitor
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "[{DeviceLabel}] Error checking device for Phone Link sessions", deviceLabel);
+            _logger.LogWarning(ex, "[{DeviceLabel}] Error checking device for target sessions", deviceLabel);
         }
     }
 
     /// <summary>
-    /// Checks if a session DisplayName indicates it belongs to Phone Link.
-    /// Phone Link sessions often have identifying information in their DisplayName.
+    /// Checks if a session DisplayName indicates it belongs to the target process.
     /// </summary>
-    private bool IsPhoneLinkSession(string displayName)
+    private bool IsTargetSession(string displayName)
     {
         if (string.IsNullOrWhiteSpace(displayName))
             return false;
 
-        // Check for Phone Link identifiers in DisplayName
-        // Phone Link, PhoneExperienceHost, call-related names
         var lowerName = displayName.ToLowerInvariant();
-        return lowerName.Contains("phone") || 
-               lowerName.Contains("call") || 
-               lowerName.Contains("experience");
+        if (!string.IsNullOrWhiteSpace(_targetProcessName) && lowerName.Contains(_targetProcessName.ToLowerInvariant()))
+        {
+            return true;
+        }
+
+        // Fallback to common call-related keywords for typical calling apps
+        return _defaultSessionKeywords.Any(keyword => lowerName.Contains(keyword));
     }
 
     /// <summary>
-    /// Checks if a svchost.exe process is related to Phone Link / Windows Runtime.
-    /// Phone Link uses Windows Runtime which runs in svchost.exe processes.
-    /// Enhanced to also check DisplayName for Phone Link identifiers.
-    /// This is heuristic-based: if svchost is running and Phone Link is running,
-    /// any active microphone session in svchost is likely Phone Link.
+    /// Checks if a svchost.exe process is related to the target / Windows Runtime.
+    /// This is heuristic-based: if svchost is running and the target process is running,
+    /// any active microphone session in svchost is likely part of the target pipeline.
     /// </summary>
-    private bool IsServiceHostRelatedToPhoneLink(int processId, string displayName)
+    private bool IsServiceHostRelatedToTarget(int processId, string displayName)
     {
         try
         {
@@ -352,18 +355,17 @@ public class ProcessAudioMonitor
             if (process == null)
                 return false;
 
-            // Only consider svchost processes as Phone Link-related
+            // Only consider svchost processes as target-related
             if (!process.ProcessName.Equals("svchost", StringComparison.OrdinalIgnoreCase))
                 return false;
 
-            // Check if DisplayName indicates Phone Link
-            if (IsPhoneLinkSession(displayName))
+            // Check if DisplayName indicates the target
+            if (IsTargetSession(displayName))
                 return true;
 
-            // svchost is Phone Link-related if Phone Link is currently running
-            // This is a heuristic, but phone calls typically use svchost for audio sessions
-            var phoneExperienceProcesses = Process.GetProcessesByName("PhoneExperienceHost");
-            return phoneExperienceProcesses.Length > 0;
+            // svchost is target-related if the target is currently running
+            var targetProcesses = Process.GetProcessesByName(_targetProcessName);
+            return targetProcesses.Length > 0;
         }
         catch
         {

@@ -75,6 +75,11 @@ class Program
             getDefaultValue: () => false,
             description: "Enable automatic passthrough control and default microphone switching when calls are active. Requires --mic to be set.");
 
+        var targetProcessOption = new Option<string>(
+            aliases: new[] { "--monitor-process" },
+            getDefaultValue: () => "PhoneExperienceHost",
+            description: "Process name (without .exe) to monitor for auto-switch detection. Default: 'PhoneExperienceHost'.");
+
         var daemonOption = new Option<bool>(
             aliases: new[] { "-d", "--daemon" },
             getDefaultValue: () => false,
@@ -92,6 +97,7 @@ class Program
         rootCommand.AddOption(listDevicesOption);
         rootCommand.AddOption(verboseOption);
         rootCommand.AddOption(autoSwitchOption);
+        rootCommand.AddOption(targetProcessOption);
         rootCommand.AddOption(daemonOption);
 
         // Set the handler using context to access parsed values
@@ -110,8 +116,14 @@ class Program
                 ListDevices = context.ParseResult.GetValueForOption(listDevicesOption),
                 Verbose = context.ParseResult.GetValueForOption(verboseOption),
                 AutoSwitch = context.ParseResult.GetValueForOption(autoSwitchOption),
+                TargetProcessName = context.ParseResult.GetValueForOption(targetProcessOption),
                 Daemon = context.ParseResult.GetValueForOption(daemonOption)
             };
+
+            if (string.IsNullOrWhiteSpace(options.TargetProcessName))
+            {
+                options.TargetProcessName = "PhoneExperienceHost";
+            }
 
             context.ExitCode = RunApplication(options);
         });
@@ -428,7 +440,7 @@ class Program
                         var micDevice = deviceManager.FindDevice(DataFlow.Capture, opts.Mic);
                         var cableCaptureDevice = deviceManager.FindDevice(DataFlow.Capture, opts.CableCapture);
                         string cableDeviceId = cableCaptureDevice?.ID ?? null;
-                        audioMonitor = new ProcessAudioMonitor(wrappedLogger, micDevice.ID, cableDeviceId);
+                        audioMonitor = new ProcessAudioMonitor(wrappedLogger, micDevice.ID, cableDeviceId, opts.TargetProcessName);
                         statusWindow.AddLog("Auto-switch monitor initialized");
                         
                         // Start ProcessAudioMonitor's internal device usage monitoring thread with proper cancellation token
@@ -550,7 +562,7 @@ class Program
                     string cableDeviceId = cableCaptureDevice?.ID ?? null;
                     
                     // Create monitor with device IDs (both as GUIDs, not names)
-                    audioMonitor = new ProcessAudioMonitor(wrappedLogger, deviceId, cableDeviceId);
+                    audioMonitor = new ProcessAudioMonitor(wrappedLogger, deviceId, cableDeviceId, opts.TargetProcessName);
                     statusWindow.AddLog("Auto-switch monitor initialized");
                     
                     // Start ProcessAudioMonitor's internal device usage monitoring thread with proper cancellation token
