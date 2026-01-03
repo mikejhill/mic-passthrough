@@ -499,8 +499,8 @@ When users mention CI or workflow failures, **ALWAYS** use GitHub MCP tools to i
    ```
    github-mcp-server-actions_list
    - method: list_workflow_runs
-   - owner: mikejhill
-   - repo: mic-passthrough
+   - owner: <repository_owner>
+   - repo: <repository_name>
    - resource_id: ci.yml (or release.yml)
    - per_page: 5 (limit results to avoid context overflow)
    - page: 1
@@ -512,8 +512,8 @@ When users mention CI or workflow failures, **ALWAYS** use GitHub MCP tools to i
    ```
    github-mcp-server-actions_get
    - method: get_workflow_run
-   - owner: mikejhill
-   - repo: mic-passthrough
+   - owner: <repository_owner>
+   - repo: <repository_name>
    - resource_id: <run_id from step 1>
    ```
    This provides run metadata, conclusion, and job information
@@ -522,8 +522,8 @@ When users mention CI or workflow failures, **ALWAYS** use GitHub MCP tools to i
    ```
    github-mcp-server-actions_list
    - method: list_workflow_jobs
-   - owner: mikejhill
-   - repo: mic-passthrough
+   - owner: <repository_owner>
+   - repo: <repository_name>
    - resource_id: <run_id>
    ```
    This shows all jobs in the run and their individual statuses
@@ -531,8 +531,8 @@ When users mention CI or workflow failures, **ALWAYS** use GitHub MCP tools to i
 4. **Get Job Logs:**
    ```
    github-mcp-server-get_job_logs
-   - owner: mikejhill
-   - repo: mic-passthrough
+   - owner: <repository_owner>
+   - repo: <repository_name>
    - job_id: <job_id from step 3>
    - return_content: true
    - tail_lines: 500 (or more if needed)
@@ -542,8 +542,8 @@ When users mention CI or workflow failures, **ALWAYS** use GitHub MCP tools to i
 5. **Get All Failed Job Logs (Alternative):**
    ```
    github-mcp-server-get_job_logs
-   - owner: mikejhill
-   - repo: mic-passthrough
+   - owner: <repository_owner>
+   - repo: <repository_name>
    - run_id: <run_id>
    - failed_only: true
    - return_content: true
@@ -612,8 +612,8 @@ github-mcp-server-actions_list
 ```
 github-mcp-server-actions_run_trigger
 - method: run_workflow
-- owner: mikejhill
-- repo: mic-passthrough
+- owner: <repository_owner>
+- repo: <repository_name>
 - workflow_id: ci.yml
 - ref: main (branch or tag name)
 - inputs: {} (if workflow accepts inputs)
@@ -623,8 +623,8 @@ github-mcp-server-actions_run_trigger
 ```
 github-mcp-server-actions_run_trigger
 - method: rerun_workflow_run
-- owner: mikejhill
-- repo: mic-passthrough
+- owner: <repository_owner>
+- repo: <repository_name>
 - run_id: <run_id>
 ```
 
@@ -632,8 +632,8 @@ github-mcp-server-actions_run_trigger
 ```
 github-mcp-server-actions_run_trigger
 - method: rerun_failed_jobs
-- owner: mikejhill
-- repo: mic-passthrough
+- owner: <repository_owner>
+- repo: <repository_name>
 - run_id: <run_id>
 ```
 
@@ -641,8 +641,8 @@ github-mcp-server-actions_run_trigger
 ```
 github-mcp-server-actions_run_trigger
 - method: cancel_workflow_run
-- owner: mikejhill
-- repo: mic-passthrough
+- owner: <repository_owner>
+- repo: <repository_name>
 - run_id: <run_id>
 ```
 
