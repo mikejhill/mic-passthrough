@@ -480,6 +480,211 @@ See [docs/QUICK_RELEASE.md](../docs/QUICK_RELEASE.md) for checklist.
 - Shows usage examples
 - Links to VB-Audio Virtual Cable
 
+## Investigating GitHub Actions Workflows
+
+When users mention CI, build, test, or workflow failures, **ALWAYS** use GitHub MCP tools to investigate. **NEVER** claim you cannot access CI logs - you have GitHub MCP server tools available.
+
+### Available MCP Tools for GitHub Actions
+
+1. **github-mcp-server-actions_list** - List workflows, runs, jobs, and artifacts
+2. **github-mcp-server-actions_get** - Get workflow/run/job details and logs
+3. **github-mcp-server-actions_run_trigger** - Run, rerun, or cancel workflows
+
+### Standard Workflow Investigation Process
+
+**ALWAYS** follow this workflow when investigating CI failures:
+
+1. **List Recent Workflow Runs:**
+   ```
+   github-mcp-server-actions_list
+   - method: list_workflow_runs
+   - owner: mikejhill
+   - repo: mic-passthrough
+   - resource_id: ci.yml (or release.yml)
+   ```
+   This shows recent runs with status (success, failure, in_progress, etc.)
+
+2. **Get Workflow Run Details:**
+   ```
+   github-mcp-server-actions_get
+   - method: get_workflow_run
+   - owner: mikejhill
+   - repo: mic-passthrough
+   - resource_id: <run_id from step 1>
+   ```
+   This provides run metadata, conclusion, and job information
+
+3. **List Jobs for Failed Run:**
+   ```
+   github-mcp-server-actions_list
+   - method: list_workflow_jobs
+   - owner: mikejhill
+   - repo: mic-passthrough
+   - resource_id: <run_id>
+   ```
+   This shows all jobs in the run and their individual statuses
+
+4. **Get Job Logs:**
+   ```
+   github-mcp-server-get_job_logs
+   - owner: mikejhill
+   - repo: mic-passthrough
+   - job_id: <job_id from step 3>
+   - return_content: true
+   - tail_lines: 500 (or more if needed)
+   ```
+   This retrieves the actual log output to diagnose failures
+
+5. **Get All Failed Job Logs (Alternative):**
+   ```
+   github-mcp-server-get_job_logs
+   - owner: mikejhill
+   - repo: mic-passthrough
+   - run_id: <run_id>
+   - failed_only: true
+   - return_content: true
+   - tail_lines: 500
+   ```
+   This gets logs for all failed jobs at once
+
+### Common Investigation Scenarios
+
+#### Scenario 1: User Reports "CI is failing"
+```
+1. List recent workflow runs to find the failing run
+2. Get workflow run details to see which jobs failed
+3. Get job logs for the failed job(s)
+4. Analyze logs to identify the root cause
+5. Propose a fix based on the error messages
+```
+
+#### Scenario 2: Check Current Build Status
+```
+1. List workflow runs with status filter
+   - workflow_runs_filter.status: "in_progress" or "completed"
+2. Review the most recent run's conclusion
+```
+
+#### Scenario 3: Investigate Test Failures
+```
+1. List workflow runs for ci.yml
+2. Find runs with conclusion: "failure"
+3. Get job logs for "Run Unit Tests" step
+4. Parse test failure output
+5. Identify which tests failed and why
+```
+
+#### Scenario 4: Debug Release Workflow Issues
+```
+1. List workflow runs for release.yml
+2. Check if tag trigger worked correctly
+3. Verify build and test steps passed
+4. Check if release creation succeeded
+5. Validate artifact upload
+```
+
+### Workflow Filtering Options
+
+When listing workflow runs, you can filter by:
+- **status:** queued, in_progress, completed, requested, waiting
+- **branch:** Filter to specific branch (e.g., main, develop)
+- **event:** Filter by trigger event (push, pull_request, tag, etc.)
+- **actor:** Filter to runs triggered by specific user
+
+Example:
+```
+github-mcp-server-actions_list
+- method: list_workflow_runs
+- resource_id: ci.yml
+- workflow_runs_filter:
+    status: "completed"
+    branch: "main"
+```
+
+### Triggering and Managing Workflows
+
+#### Run a Workflow Manually
+```
+github-mcp-server-actions_run_trigger
+- method: run_workflow
+- owner: mikejhill
+- repo: mic-passthrough
+- workflow_id: ci.yml
+- ref: main (branch or tag name)
+- inputs: {} (if workflow accepts inputs)
+```
+
+#### Rerun a Failed Workflow
+```
+github-mcp-server-actions_run_trigger
+- method: rerun_workflow_run
+- owner: mikejhill
+- repo: mic-passthrough
+- run_id: <run_id>
+```
+
+#### Rerun Only Failed Jobs
+```
+github-mcp-server-actions_run_trigger
+- method: rerun_failed_jobs
+- owner: mikejhill
+- repo: mic-passthrough
+- run_id: <run_id>
+```
+
+#### Cancel a Running Workflow
+```
+github-mcp-server-actions_run_trigger
+- method: cancel_workflow_run
+- owner: mikejhill
+- repo: mic-passthrough
+- run_id: <run_id>
+```
+
+### Best Practices
+
+1. **Always start with list_workflow_runs** to get recent run IDs
+2. **Use return_content: true** when getting job logs to see actual output
+3. **Adjust tail_lines** based on log size (default 500 may be insufficient)
+4. **Check multiple jobs** if workflow has parallel jobs (build-and-test, license-compliance)
+5. **Look for patterns** in failures (flaky tests, environment issues, dependency problems)
+6. **Provide specific error messages** from logs when proposing fixes
+7. **Never guess** - always check actual logs before diagnosing issues
+
+### Log Analysis Tips
+
+When analyzing job logs:
+- Look for **error messages** and **stack traces**
+- Check for **failing test names** in test output
+- Identify **build errors** (compilation, dependency resolution)
+- Note **timing issues** (timeouts, slow steps)
+- Check for **authentication/permission errors**
+- Look for **environment-specific issues** (Windows-only, .NET version)
+
+### Example Investigation Workflow
+
+```
+User: "The CI build is failing, can you check?"
+
+1. github-mcp-server-actions_list (method: list_workflow_runs, resource_id: ci.yml)
+   → Find most recent run with conclusion: "failure"
+
+2. github-mcp-server-actions_list (method: list_workflow_jobs, resource_id: <run_id>)
+   → Identify which job failed (e.g., "Build and Test")
+
+3. github-mcp-server-get_job_logs (job_id: <job_id>, return_content: true, tail_lines: 1000)
+   → Retrieve logs showing:
+     "error CS1002: ; expected"
+     "  at Program.cs line 42"
+
+4. Analyze the error:
+   → Missing semicolon in Program.cs at line 42
+
+5. Propose fix:
+   → "The CI is failing because of a syntax error in Program.cs line 42.
+      A semicolon is missing. I'll fix this now."
+```
+
 ## When Generating Code
 
 ### Audio-Related Code
