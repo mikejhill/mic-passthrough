@@ -140,7 +140,7 @@ ruleSet {
         
         licenseRule("LICENSE_MUST_BE_ALLOWED", LicenseView.CONCLUDED_OR_DECLARED_AND_DETECTED) {
             require {
-                // WHITELIST CHECK: License must NOT be in the allowed list (triggers error)
+                // WHITELIST CHECK: Trigger error when license is NOT in the allowed list
                 license !in allowedLicenses
             }
             
