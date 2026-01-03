@@ -98,57 +98,59 @@ if (overlap.isNotEmpty()) {
     )
 }
 
+// Helper function for fix instructions
+fun PackageRule.howToFixLicenseIssue(license: String, isKnownCopyleft: Boolean): String {
+    return if (isKnownCopyleft) {
+        """
+        Package uses COPYLEFT license '$license' which is INCOMPATIBLE with MIT.
+        This license requires derivative works to also use '$license', which conflicts with MIT licensing.
+        
+        REQUIRED ACTIONS:
+        1. Find an alternative package with a permissive license (MIT, Apache-2.0, BSD, etc.)
+        2. Remove this dependency if not essential
+        3. Consult legal counsel if this dependency is critical
+        
+        Allowed licenses: ${allowedLicenses.sorted().joinToString(", ")}
+        """.trimIndent()
+    } else {
+        """
+        Package uses license '$license' which is NOT in the approved whitelist.
+        This license has not been reviewed for compatibility with MIT.
+        
+        REQUIRED ACTIONS:
+        1. Verify this license is permissive and compatible with MIT
+        2. If compatible, add it to allowedLicenses in .ort/policy/rules.kts
+        3. If incompatible, find an alternative package
+        4. Consult legal counsel if uncertain
+        
+        Allowed licenses: ${allowedLicenses.sorted().joinToString(", ")}
+        Known incompatible licenses: ${disallowedLicenses.sorted().take(10).joinToString(", ")}...
+        """.trimIndent()
+    }
+}
+
 // RULE SET: Enforce whitelist-based license compliance
-ruleSet(ortResult, licenseInfoResolver) {
-    
+ruleSet {
     // Rule: Only allow whitelisted licenses
     packageRule("REQUIRE_WHITELISTED_LICENSE") {
         require {
-            // Apply to all packages (not just excluded ones)
+            // Apply to all packages
             true
         }
         
         licenseRule("LICENSE_MUST_BE_ALLOWED", LicenseView.CONCLUDED_OR_DECLARED_AND_DETECTED) {
             require {
-                // WHITELIST CHECK: License must be in the allowed list
+                // WHITELIST CHECK: License must NOT be in the allowed list (triggers error)
                 license !in allowedLicenses
             }
             
             // Determine if this is a known copyleft license
             val isKnownCopyleft = license in disallowedLicenses
-            val severity = if (isKnownCopyleft) "ERROR" else "WARNING"
             
-            val message = if (isKnownCopyleft) {
-                """
-                |$severity: Package '${pkg.id.toCoordinates()}' uses COPYLEFT license '$license' which is INCOMPATIBLE with MIT.
-                |
-                |This license requires derivative works to also use '$license', which conflicts with MIT licensing.
-                |
-                |REQUIRED ACTION:
-                |1. Find an alternative package with a permissive license (MIT, Apache-2.0, BSD, etc.)
-                |2. Remove this dependency if not essential
-                |3. Consult legal counsel if this dependency is critical
-                |
-                |Allowed licenses: ${allowedLicenses.sorted().joinToString(", ")}
-                """.trimMargin()
-            } else {
-                """
-                |$severity: Package '${pkg.id.toCoordinates()}' uses license '$license' which is NOT in the approved whitelist.
-                |
-                |This license has not been reviewed for compatibility with MIT.
-                |
-                |REQUIRED ACTION:
-                |1. Verify this license is permissive and compatible with MIT
-                |2. If compatible, add it to allowedLicenses in .ort/policy/rules.kts
-                |3. If incompatible, find an alternative package
-                |4. Consult legal counsel if uncertain
-                |
-                |Allowed licenses: ${allowedLicenses.sorted().joinToString(", ")}
-                |Known incompatible licenses: ${disallowedLicenses.sorted().take(10).joinToString(", ")}...
-                """.trimMargin()
-            }
-            
-            error(message)
+            error(
+                "License '$license' is not whitelisted for package '${pkg.id.toCoordinates()}'.",
+                howToFixLicenseIssue(license, isKnownCopyleft)
+            )
         }
     }
 }

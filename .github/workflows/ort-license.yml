@@ -18,11 +18,8 @@ jobs:
     - name: Run ORT Analysis and Evaluation
       uses: oss-review-toolkit/ort-ci-github-action@v1
       with:
-        # Run ORT analyzer to detect all dependencies
-        run: |
-          analyze
-          evaluate
-          report
+        # Run ORT analyzer, evaluator, and reporter
+        run: 'analyze evaluate report'
         
         # Use local policy rules for evaluation
         ort-cli-analyze-args: '--package-managers NuGet'
