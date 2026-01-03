@@ -19,6 +19,9 @@ jobs:
     - name: Run ORT Analysis and Evaluation
       uses: oss-review-toolkit/ort-ci-github-action@v1
       with:
+        # Run ORT analyzer, evaluator, and reporter
+        run: 'analyze evaluate report'
+        
         # Package managers to analyze
         ort-cli-analyze-args: '--package-managers NuGet'
         
