@@ -533,7 +533,7 @@ When asked to investigate workflow failures, follow this process:
    - resource_id: <run_id>
    ```
 
-4. **Get Logs Download URL:**
+4. **Get Logs Download URL (run-level ZIP):**
    ```
    github-mcp-server-actions_get
    - method: get_workflow_run_logs_url
@@ -541,6 +541,7 @@ When asked to investigate workflow failures, follow this process:
    - repo: <repository_name>
    - resource_id: <run_id>
    ```
+   Download the ZIP from `logs_url`, then open the job folders (e.g., `Build and Test/*.txt`, `license-compliance _ ORT License Compliance/*.txt`) to read step output and failures. Prefer this when `get_job_logs` is unavailable.
 
 5. **Download and Extract Logs:**
    ```bash
