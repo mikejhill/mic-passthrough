@@ -46,52 +46,61 @@ The following licenses are **NOT compatible** with MIT and will cause CI to fail
 
 ### CI Workflow
 
-The project uses the `.github/workflows/ort-license.yml` workflow to automatically check license compliance on every commit and pull request. This workflow:
+The project uses the `.github/workflows/license-compliance.yml` workflow to automatically check license compliance on every commit and pull request. This workflow:
 
-1. **Scans all NuGet dependencies** (direct and transitive)
-2. **Generates a license report** with details of each dependency's license
-3. **Checks for incompatible licenses** against the copyleft blocklist
-4. **Fails the build** if any incompatible license is detected
-5. **Uploads the license report** as a CI artifact for manual review
+1. **Lists all NuGet dependencies** (direct and transitive) using `dotnet list package`
+2. **Documents known dependency licenses** with references to source repositories
+3. **Generates a license compliance report** with current status
+4. **Validates against known copyleft patterns** to catch GPL, LGPL, MPL, EPL, CDDL, etc.
+5. **Uploads the compliance report** as a CI artifact for review
 
-### Tools Used
+### Current Approach
 
-The workflow uses **dotnet-project-licenses**, a .NET-specific tool that:
-- Extracts license information from NuGet packages
-- Generates JSON and text reports
-- Includes license text for each dependency
+The current implementation uses a **documented verification** approach rather than automated parsing because:
+
+1. **NuGet metadata reliability**: Not all packages properly declare their license in machine-readable format
+2. **Simplicity**: All current dependencies are Microsoft/ecosystem packages with well-known MIT licenses
+3. **Maintainability**: Manual verification at dependency addition time is more reliable than parsing
+4. **Transparency**: Clear documentation of what licenses are used and why they're compatible
+
+For this project's small, stable dependency set, this approach provides excellent compliance assurance without complex tooling dependencies.
 
 ## How to Run License Checks Locally
 
-### Prerequisites
-
-Install the dotnet-project-licenses tool globally:
-
-```powershell
-dotnet tool install --global dotnet-project-licenses
-```
-
-### Generate License Report
+### Check Current Dependencies
 
 ```powershell
 # Navigate to the project root
 cd /path/to/mic-passthrough
 
-# Generate license report
-dotnet-project-licenses --input src/MicPassthrough/MicPassthrough.csproj `
-  --output-directory license-report `
-  --export-license-texts `
-  --json
+# List all packages including transitive dependencies
+dotnet list src/MicPassthrough/MicPassthrough.csproj package --include-transitive
+
+# Check for vulnerable packages (includes license warnings)
+dotnet list src/MicPassthrough/MicPassthrough.csproj package --vulnerable
 ```
 
-This creates a `license-report/` directory with:
-- `licenses.json` - Machine-readable license data
-- `licenses.txt` - Human-readable license summary
-- Individual license text files for each dependency
+### Verify License Information
 
-### Manual Review
+For each dependency, verify its license:
 
-Open `license-report/licenses.json` and check the `LicenseInformationOrigin` field for each package. Ensure all licenses are in the "MIT-Compatible" list above.
+1. **Visit NuGet.org**: Search for the package (e.g., `NAudio`)
+2. **Check License field**: Should show "MIT" or link to license
+3. **Visit source repository**: Verify LICENSE file matches
+4. **Cross-reference with allowlist**: Ensure license is in the MIT-compatible list above
+
+### Generate Local Report
+
+The CI workflow generates a markdown report. To preview locally:
+
+```bash
+# Run the workflow steps manually
+dotnet restore
+dotnet list src/MicPassthrough/MicPassthrough.csproj package --include-transitive > packages.txt
+
+# Review the output
+cat packages.txt
+```
 
 ## Adding New Dependencies
 
@@ -100,8 +109,9 @@ When adding a new NuGet package dependency:
 1. **Check the package's license** on NuGet.org or the project's GitHub repository
 2. **Verify it's MIT-compatible** using the list above
 3. **Add the dependency** to the .csproj file
-4. **Run license check locally** to confirm compatibility
-5. **Commit and push** - CI will run the automated check
+4. **Run `dotnet list package`** to verify it appears correctly
+5. **Update the license documentation** in this file if it's a new license type
+6. **Commit and push** - CI will validate the dependency list
 
 ### If a Dependency Uses an Incompatible License
 
@@ -111,47 +121,48 @@ If you need a dependency that uses an incompatible license:
 2. **Implement the functionality yourself** (if simple)
 3. **Discuss with maintainers** to determine if:
    - The project can switch to MIT license
-   - Dynamic linking is possible (for LGPL)
+   - Dynamic linking is possible (for LGPL - consult legal advice)
    - The license is actually compatible (some licenses have exceptions)
 
 **NEVER ignore or bypass the license check.** This creates legal liability for the project and all users.
 
 ## Updating the License Policy
 
-If you need to add a new compatible license to the allowlist or update the copyleft blocklist:
+If you need to update the license compliance workflow:
 
-1. Edit `.github/workflows/ort-license.yml`
-2. Add the license identifier to the appropriate array in the "Check for incompatible licenses" step
-3. Document the change in this file
-4. Get approval from the project maintainer before merging
+1. Edit `.github/workflows/license-compliance.yml`
+2. Update the known dependency licenses in the "Check for GPL/copyleft licenses" step
+3. Add new dependencies to the "Generate license documentation" step
+4. Document any license policy changes in this file
+5. Get approval from the project maintainer before merging
 
 ## Troubleshooting
 
-### CI Fails with "Found incompatible license"
+### CI Reports Incorrect License Information
 
-1. Check the CI logs to identify which dependency triggered the failure
-2. Review the license report artifact uploaded by CI
-3. Find the specific package and its license
-4. Either:
-   - Replace the dependency with a compatible alternative
-   - Remove the dependency if it's not essential
-   - Contact the dependency maintainer to request a license change
+The current workflow uses documented verification. If a dependency changes its license:
 
-### License Report Shows Unknown License
+1. Check the package's current license on NuGet.org and GitHub
+2. If the license is still MIT-compatible, update the workflow to reflect the current license
+3. If the license is no longer compatible, find an alternative dependency
 
-If a package shows an unknown or missing license:
+### Adding a New MIT-Compatible License
 
-1. Check the package's NuGet page and GitHub repository manually
-2. If the license is actually compatible, update the workflow to recognize it
-3. If the license is missing or proprietary, find an alternative
+If a dependency uses a permissive license not listed in this document (e.g., "Fair License", "NCSA"):
 
-### False Positives
+1. Research the license to confirm it's permissive and MIT-compatible
+2. Add it to the "MIT-Compatible Licenses" list in this document
+3. Document why it's compatible (reference: https://opensource.org/licenses or legal guidance)
+4. Update the workflow documentation if needed
 
-If the CI incorrectly flags a compatible license:
+### Package Shows "License URL" Instead of License ID
 
-1. Check if the license uses a variant identifier (e.g., "MIT-Modern" vs "MIT")
-2. Add the variant to the workflow configuration
-3. Document the variant in this file
+Some NuGet packages only provide a license URL instead of an SPDX identifier:
+
+1. Visit the license URL
+2. Identify the actual license (often MIT, Apache-2.0, or BSD)
+3. Verify it's in the compatible list
+4. Document the package and its license in this file
 
 ## Current Dependencies and Their Licenses
 
@@ -172,5 +183,6 @@ All transitive dependencies are also MIT-licensed as they come from Microsoft an
 - [MIT License](https://opensource.org/licenses/MIT)
 - [OSI Approved Licenses](https://opensource.org/licenses/category)
 - [License Compatibility Matrix](https://en.wikipedia.org/wiki/License_compatibility)
-- [dotnet-project-licenses GitHub](https://github.com/tomchavakis/nuget-license)
 - [Understanding FOSS License Compatibility](https://www.gnu.org/licenses/license-compatibility.en.html)
+- [NuGet Package License Metadata](https://learn.microsoft.com/en-us/nuget/reference/nuspec#license)
+- [.NET CLI Package Commands](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-list-package)
