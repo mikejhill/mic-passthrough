@@ -19,6 +19,7 @@ Developer processes, workflows, and release management.
 - [quick-release.md](development/quick-release.md) - 1-page release checklist
 - [release-guide.md](development/release-guide.md) - Complete release walkthrough
 - [versioning.md](development/versioning.md) - Semantic versioning strategy
+- [license-compliance.md](development/license-compliance.md) - OSS license compliance and dependency checking
 
 ### `/architecture`
 Technical documentation about the system design, code organization, and implementation details.

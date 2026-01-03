@@ -7,7 +7,7 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  license-compliance:
+  ort-license-compliance:
     uses: ./.github/workflows/ort-license.yml
 
   build-and-test:

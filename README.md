@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/mikejhill/mic-passthrough/actions/workflows/ci.yml/badge.svg)](https://github.com/mikejhill/mic-passthrough/actions/workflows/ci.yml)
 [![Release](https://github.com/mikejhill/mic-passthrough/actions/workflows/release.yml/badge.svg)](https://github.com/mikejhill/mic-passthrough/actions/workflows/release.yml)
+[![ORT License Compliance](https://github.com/mikejhill/mic-passthrough/actions/workflows/ort-license.yml/badge.svg)](https://github.com/mikejhill/mic-passthrough/actions/workflows/ort-license.yml)
 
 ![Microphone Passthrough Logo](docs/assets/logo.png)
 
