@@ -446,7 +446,7 @@ See [docs/QUICK_RELEASE.md](../docs/QUICK_RELEASE.md) for checklist.
 
 **Triggers:** Push to main/develop, pull requests to main/develop
 
-**IMPORTANT:** When working as a Copilot agent, PR workflows may not auto-start. See [CRITICAL: PR Workflows May Not Auto-Start](#critical-pr-workflows-may-not-auto-start) below for details on checking and manually triggering workflows.
+**IMPORTANT:** When working as a Copilot agent, PR workflows may not auto-start. See [PR Workflows May Not Auto-Start](#critical-pr-workflows-may-not-auto-start) below for details on checking and manually triggering workflows.
 
 **Steps:**
 1. Checkout code
