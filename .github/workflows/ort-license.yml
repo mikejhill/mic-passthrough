@@ -24,9 +24,9 @@ jobs:
     - name: Install ORT
       run: |
         echo "Installing ORT CLI..."
-        wget -q https://github.com/oss-review-toolkit/ort/releases/download/24.11.0/ort-24.11.0.tar.gz
-        tar -xzf ort-24.11.0.tar.gz
-        echo "$(pwd)/ort-24.11.0/bin" >> $GITHUB_PATH
+        wget -q https://github.com/oss-review-toolkit/ort/releases/download/v74.1.0/ort-74.1.0.tgz
+        tar -xzf ort-74.1.0.tgz
+        echo "$(pwd)/ort-74.1.0/bin" >> $GITHUB_PATH
         echo "ORT_DATA_DIR=$(pwd)/.ort" >> $GITHUB_ENV
 
     - name: Run ORT Analyzer
