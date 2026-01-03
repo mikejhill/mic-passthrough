@@ -502,8 +502,11 @@ When users mention CI or workflow failures, **ALWAYS** use GitHub MCP tools to i
    - owner: mikejhill
    - repo: mic-passthrough
    - resource_id: ci.yml (or release.yml)
+   - per_page: 5 (limit results to avoid context overflow)
+   - page: 1
    ```
    This shows recent runs with status (success, failure, in_progress, etc.)
+   **CRITICAL:** Always use `per_page: 5` or smaller to prevent large responses from consuming context window
 
 2. **Get Workflow Run Details:**
    ```
@@ -597,6 +600,7 @@ Example:
 github-mcp-server-actions_list
 - method: list_workflow_runs
 - resource_id: ci.yml
+- per_page: 5
 - workflow_runs_filter:
     status: "completed"
     branch: "main"
@@ -644,10 +648,14 @@ github-mcp-server-actions_run_trigger
 
 ### Best Practices
 
-1. **Always start with list_workflow_runs** to get recent run IDs
-2. **Use return_content: true** when getting job logs to see actual output
-3. **Adjust tail_lines** based on log size (default 500 may be insufficient)
-4. **Check multiple jobs** if workflow has parallel jobs (build-and-test, license-compliance)
+1. **Always limit result size** when calling `list_workflow_runs` or `list_workflows`:
+   - Use `per_page: 5` or smaller to prevent context overflow
+   - MCP tool responses can be very large and consume your context window
+   - Start with the most recent results using `page: 1`
+2. **Always start with list_workflow_runs** to get recent run IDs
+3. **Use return_content: true** when getting job logs to see actual output
+4. **Adjust tail_lines** based on log size (default 500 may be insufficient)
+5. **Check multiple jobs** if workflow has parallel jobs (build-and-test, license-compliance)
 5. **Look for patterns** in failures (flaky tests, environment issues, dependency problems)
 6. **Provide specific error messages** from logs when proposing fixes
 7. **Never guess** - always check actual logs before diagnosing issues
