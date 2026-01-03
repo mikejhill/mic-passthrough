@@ -482,13 +482,14 @@ See [docs/QUICK_RELEASE.md](../docs/QUICK_RELEASE.md) for checklist.
 
 ## Investigating GitHub Actions Workflows
 
-When users mention CI, build, test, or workflow failures, **ALWAYS** use GitHub MCP tools to investigate. **NEVER** claim you cannot access CI logs - you have GitHub MCP server tools available.
+When users mention CI or workflow failures, **ALWAYS** use GitHub MCP tools to investigate. **NEVER** claim you cannot access CI logs - you have GitHub MCP server tools available.
 
 ### Available MCP Tools for GitHub Actions
 
 1. **github-mcp-server-actions_list** - List workflows, runs, jobs, and artifacts
 2. **github-mcp-server-actions_get** - Get workflow/run/job details and logs
-3. **github-mcp-server-actions_run_trigger** - Run, rerun, or cancel workflows
+3. **github-mcp-server-get_job_logs** - Get logs for specific jobs or all failed jobs
+4. **github-mcp-server-actions_run_trigger** - Run, rerun, or cancel workflows
 
 ### Standard Workflow Investigation Process
 
