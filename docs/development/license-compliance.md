@@ -1,33 +1,36 @@
 # License Compliance
 
-This document describes the license compliance process for the MicPassthrough project.
+This document describes the automated license compliance process for the MicPassthrough project using the OSS Review Toolkit (ORT).
 
 ## Overview
 
 MicPassthrough is licensed under the **MIT License**, one of the most permissive open-source licenses. To maintain compliance and avoid legal issues, all upstream dependencies must use licenses that are compatible with MIT.
 
+The project uses **OSS Review Toolkit (ORT)** to automatically scan all NuGet dependencies and enforce a **whitelist-based** license policy.
+
 ## What is License Compatibility?
 
 License compatibility refers to whether two licenses can be used together in the same project. Some licenses, particularly **copyleft licenses** like GPL, require that any project using GPL-licensed code must also be licensed under GPL. This creates incompatibility with MIT.
 
-### MIT-Compatible Licenses (Permissive)
+### MIT-Compatible Licenses (Whitelist)
 
-The following licenses are compatible with MIT and can be used:
+The following licenses are **explicitly whitelisted** and can be used:
 
 - **MIT** and MIT-0
 - **Apache-2.0**
-- **BSD-2-Clause**, BSD-3-Clause, BSD-3-Clause-Clear
+- **BSD-2-Clause**, BSD-3-Clause, BSD-3-Clause-Clear, 0BSD
 - **ISC**
-- **0BSD** (BSD Zero Clause)
 - **Unlicense**
 - **CC0-1.0** (Creative Commons Zero)
 - **BSL-1.0** (Boost Software License)
 - **Zlib**
 - **PostgreSQL License**
+- **Python-2.0** (Python Software Foundation License)
+- **MS-PL** (Microsoft Public License)
 
 These are all **permissive licenses** that allow usage in MIT-licensed projects without restrictions.
 
-### Incompatible Licenses (Copyleft)
+### Incompatible Licenses (Blacklist Reference)
 
 The following licenses are **NOT compatible** with MIT and will cause CI to fail:
 
@@ -37,81 +40,90 @@ The following licenses are **NOT compatible** with MIT and will cause CI to fail
 - **MPL** (Mozilla Public License 1.0, 1.1, 2.0) - Weak copyleft
 - **EPL** (Eclipse Public License 1.0, 2.0) - Weak copyleft
 - **CDDL** (Common Development and Distribution License 1.0, 1.1) - Weak copyleft
-- **OSL-3.0** (Open Software License)
-- **EUPL** (European Union Public License 1.1, 1.2)
+- **OSL** (Open Software License 1.0-3.0)
+- **EUPL** (European Union Public License 1.0-1.2)
+- **CC-BY-SA** (Creative Commons ShareAlike - copyleft)
 
 **Copyleft licenses** require that derivative works also be licensed under the same license, which conflicts with MIT's permissive nature.
 
-## Automated License Checking
+## Automated License Checking with ORT
+
+### How It Works
+
+The ORT workflow (`.github/workflows/ort-license.yml`) automatically:
+
+1. **Analyzes all NuGet dependencies** (direct and transitive) using ORT's analyzer
+2. **Extracts license information** from package metadata, LICENSE files, and source code
+3. **Evaluates against policy rules** defined in `.ort/policy/rules.kts`
+4. **Enforces the whitelist** - only explicitly allowed licenses pass
+5. **Fails the build** if any dependency uses a non-whitelisted license
+6. **Generates comprehensive reports** in multiple formats (CycloneDX, SPDX, WebApp)
+7. **Uploads results as CI artifacts** for review
+
+### Whitelist-Based Approach
+
+**Why whitelist instead of blacklist?**
+
+- **High confidence**: Only explicitly approved licenses are allowed
+- **Prevents oversights**: New/unknown licenses must be manually reviewed before approval
+- **Clear policy**: Easy to understand what licenses are acceptable
+- **Cross-validation**: Blacklist is maintained separately to ensure no conflicts
+
+The whitelist is defined in `.ort/policy/rules.kts` in the `allowedLicenses` set.
 
 ### CI Workflow
 
-The project uses the `.github/workflows/license-compliance.yml` workflow to automatically check license compliance on every commit and pull request. This workflow:
+Every commit and pull request to `main` or `develop` branches automatically triggers:
 
-1. **Lists all NuGet dependencies** (direct and transitive) using `dotnet list package`
-2. **Documents known dependency licenses** with references to source repositories
-3. **Generates a license compliance report** with current status
-4. **Validates against known copyleft patterns** to catch GPL, LGPL, MPL, EPL, CDDL, etc.
-5. **Uploads the compliance report** as a CI artifact for review
+1. **ORT Analysis** - Scans all NuGet packages
+2. **License Evaluation** - Checks against whitelist policy
+3. **Report Generation** - Creates CycloneDX SBOM, SPDX documents, and HTML reports
+4. **Build Status** - Passes or fails based on policy violations
+5. **Artifact Upload** - Results available for 90 days
 
-### Current Approach
+## Configuring License Policy
 
-The current implementation uses a **documented verification** approach rather than automated parsing because:
+### Adding a New Allowed License
 
-1. **NuGet metadata reliability**: Not all packages properly declare their license in machine-readable format
-2. **Simplicity**: All current dependencies are Microsoft/ecosystem packages with well-known MIT licenses
-3. **Maintainability**: Manual verification at dependency addition time is more reliable than parsing
-4. **Transparency**: Clear documentation of what licenses are used and why they're compatible
+If a dependency uses a permissive license not in the whitelist:
 
-For this project's small, stable dependency set, this approach provides excellent compliance assurance without complex tooling dependencies.
+1. **Verify the license is permissive** and compatible with MIT
+   - Check https://opensource.org/licenses
+   - Consult legal guidance if uncertain
 
-## How to Run License Checks Locally
+2. **Edit `.ort/policy/rules.kts`**:
+   ```kotlin
+   val allowedLicenses = setOf(
+       "MIT",
+       "Apache-2.0",
+       // ... existing licenses ...
+       "NewLicense-1.0"  // Add here with SPDX identifier
+   )
+   ```
 
-### Check Current Dependencies
+3. **Document the change** in this file under the whitelist section
 
-```powershell
-# Navigate to the project root
-cd /path/to/mic-passthrough
+4. **Commit and push** - CI will validate the updated policy
 
-# List all packages including transitive dependencies
-dotnet list src/MicPassthrough/MicPassthrough.csproj package --include-transitive
+### Cross-Validation
 
-# Check for vulnerable packages (includes license warnings)
-dotnet list src/MicPassthrough/MicPassthrough.csproj package --vulnerable
-```
+The rules file maintains both a whitelist (`allowedLicenses`) and a blacklist (`disallowedLicenses`) for validation:
 
-### Verify License Information
-
-For each dependency, verify its license:
-
-1. **Visit NuGet.org**: Search for the package (e.g., `NAudio`)
-2. **Check License field**: Should show "MIT" or link to license
-3. **Visit source repository**: Verify LICENSE file matches
-4. **Cross-reference with allowlist**: Ensure license is in the MIT-compatible list above
-
-### Generate Local Report
-
-The CI workflow generates a markdown report. To preview locally:
-
-```bash
-# Run the workflow steps manually
-dotnet restore
-dotnet list src/MicPassthrough/MicPassthrough.csproj package --include-transitive > packages.txt
-
-# Review the output
-cat packages.txt
-```
+- **Startup validation**: ORT checks that no license appears in both lists
+- **Prevents configuration errors**: Ensures policy consistency
+- **Clear separation**: Explicitly documents incompatible licenses
 
 ## Adding New Dependencies
 
 When adding a new NuGet package dependency:
 
-1. **Check the package's license** on NuGet.org or the project's GitHub repository
-2. **Verify it's MIT-compatible** using the list above
-3. **Add the dependency** to the .csproj file
-4. **Run `dotnet list package`** to verify it appears correctly
-5. **Update the license documentation** in this file if it's a new license type
-6. **Commit and push** - CI will validate the dependency list
+1. **Add the dependency** to the .csproj file
+2. **Run locally** (optional): `dotnet restore` to fetch the package
+3. **Commit and push** - ORT will automatically scan the new dependency
+4. **If CI fails**:
+   - Check the ORT results artifact to see which license was detected
+   - If the license is permissive and MIT-compatible, add it to the whitelist
+   - If the license is copyleft or incompatible, find an alternative package
 
 ### If a Dependency Uses an Incompatible License
 
@@ -121,68 +133,113 @@ If you need a dependency that uses an incompatible license:
 2. **Implement the functionality yourself** (if simple)
 3. **Discuss with maintainers** to determine if:
    - The project can switch to MIT license
-   - Dynamic linking is possible (for LGPL - consult legal advice)
+   - Dynamic linking is possible (for LGPL - requires legal consultation)
    - The license is actually compatible (some licenses have exceptions)
 
-**NEVER ignore or bypass the license check.** This creates legal liability for the project and all users.
+**NEVER bypass the license check.** This creates legal liability for the project and all users.
 
-## Updating the License Policy
+## Local Testing
 
-If you need to update the license compliance workflow:
+### Running ORT Locally
 
-1. Edit `.github/workflows/license-compliance.yml`
-2. Update the known dependency licenses in the "Check for GPL/copyleft licenses" step
-3. Add new dependencies to the "Generate license documentation" step
-4. Document any license policy changes in this file
-5. Get approval from the project maintainer before merging
+To test license compliance before pushing:
+
+```bash
+# Install ORT (requires JDK 11+)
+# See https://oss-review-toolkit.org/ort/docs/getting-started/installation
+
+# Run ORT analyzer
+ort analyze -i . -o .ort/local
+
+# Run ORT evaluator with local rules
+ort evaluate -i .ort/local/analyzer-result.yml \
+  -o .ort/local \
+  --rules-file .ort/policy/rules.kts
+
+# Generate reports
+ort report -i .ort/local/evaluation-result.yml \
+  -o .ort/local/reports \
+  -f WebApp,CycloneDx
+```
+
+### Quick Dependency Check
+
+```powershell
+# List all NuGet packages
+dotnet list src/MicPassthrough/MicPassthrough.csproj package --include-transitive
+
+# Check NuGet.org for license information
+# Visit https://www.nuget.org/packages/{PackageName}
+```
 
 ## Troubleshooting
 
-### CI Reports Incorrect License Information
+### CI Fails with "License not in whitelist"
 
-The current workflow uses documented verification. If a dependency changes its license:
+1. **Check the ORT results artifact** uploaded by CI
+2. **Find the specific package and license** in the evaluation report
+3. **Verify the license** on NuGet.org and the package's repository
+4. **If MIT-compatible**: Add to whitelist in `.ort/policy/rules.kts`
+5. **If incompatible**: Find an alternative dependency
 
-1. Check the package's current license on NuGet.org and GitHub
-2. If the license is still MIT-compatible, update the workflow to reflect the current license
-3. If the license is no longer compatible, find an alternative dependency
+### Unknown or Unlicensed Package
 
-### Adding a New MIT-Compatible License
+If ORT cannot detect a license:
 
-If a dependency uses a permissive license not listed in this document (e.g., "Fair License", "NCSA"):
+1. **Check the package manually** on NuGet.org and GitHub
+2. **Review the LICENSE file** in the package's repository
+3. **Contact the package maintainer** if license is missing
+4. **Find an alternative** if license cannot be verified
 
-1. Research the license to confirm it's permissive and MIT-compatible
-2. Add it to the "MIT-Compatible Licenses" list in this document
-3. Document why it's compatible (reference: https://opensource.org/licenses or legal guidance)
-4. Update the workflow documentation if needed
+### ORT Configuration Issues
 
-### Package Shows "License URL" Instead of License ID
+If ORT fails to run or produces errors:
 
-Some NuGet packages only provide a license URL instead of an SPDX identifier:
-
-1. Visit the license URL
-2. Identify the actual license (often MIT, Apache-2.0, or BSD)
-3. Verify it's in the compatible list
-4. Document the package and its license in this file
+1. **Check ORT version** - Ensure using compatible version (v1)
+2. **Review ORT logs** in CI workflow output
+3. **Validate rules.kts syntax** - Kotlin syntax errors will fail evaluation
+4. **Consult ORT documentation** - https://oss-review-toolkit.org/ort/docs/
 
 ## Current Dependencies and Their Licenses
 
-As of the latest check, all current dependencies are MIT-licensed:
+All current dependencies are MIT-licensed and whitelisted:
 
-| Package | Version | License |
-|---------|---------|---------|
-| NAudio | 2.2.1 | MIT |
-| System.CommandLine | 2.0.0-beta4 | MIT |
-| Microsoft.Extensions.Logging | 9.0.0 | MIT |
-| Microsoft.Extensions.Logging.Console | 9.0.0 | MIT |
-| System.Drawing.Common | 8.0.0 | MIT |
+| Package | Version | License | Verified |
+|---------|---------|---------|----------|
+| NAudio | 2.2.1 | MIT | ✅ |
+| System.CommandLine | 2.0.0-beta4 | MIT | ✅ |
+| Microsoft.Extensions.Logging | 9.0.0 | MIT | ✅ |
+| Microsoft.Extensions.Logging.Console | 9.0.0 | MIT | ✅ |
+| System.Drawing.Common | 8.0.0 | MIT | ✅ |
 
-All transitive dependencies are also MIT-licensed as they come from Microsoft and the .NET ecosystem, which primarily uses MIT.
+All transitive dependencies are also MIT-licensed as they come from Microsoft and the .NET ecosystem.
+
+## ORT Configuration Files
+
+### `.ort/policy/rules.kts`
+
+Kotlin-based policy rules that define:
+- `allowedLicenses` - Whitelist of permitted licenses (SPDX identifiers)
+- `disallowedLicenses` - Blacklist for cross-reference validation
+- Policy rules that enforce the whitelist
+- Error messages with remediation guidance
+
+### `.github/workflows/ort-license.yml`
+
+GitHub Actions workflow that:
+- Runs ORT analyzer on NuGet packages
+- Evaluates results against policy rules
+- Generates CycloneDX and SPDX reports
+- Uploads results as artifacts
+- Comments on pull requests with compliance status
 
 ## References
 
+- [OSS Review Toolkit Documentation](https://oss-review-toolkit.org/ort/docs/)
+- [ORT Evaluator Rules](https://oss-review-toolkit.org/ort/docs/configuration/evaluator-rules)
 - [MIT License](https://opensource.org/licenses/MIT)
 - [OSI Approved Licenses](https://opensource.org/licenses/category)
-- [License Compatibility Matrix](https://en.wikipedia.org/wiki/License_compatibility)
+- [License Compatibility](https://en.wikipedia.org/wiki/License_compatibility)
+- [SPDX License List](https://spdx.org/licenses/)
+- [CycloneDX SBOM Standard](https://cyclonedx.org/)
 - [Understanding FOSS License Compatibility](https://www.gnu.org/licenses/license-compatibility.en.html)
-- [NuGet Package License Metadata](https://learn.microsoft.com/en-us/nuget/reference/nuspec#license)
-- [.NET CLI Package Commands](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-list-package)

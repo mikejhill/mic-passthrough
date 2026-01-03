@@ -7,8 +7,8 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  license-compliance:
-    uses: ./.github/workflows/license-compliance.yml
+  ort-license-compliance:
+    uses: ./.github/workflows/ort-license.yml
 
   build-and-test:
     runs-on: windows-latest
