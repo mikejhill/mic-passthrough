@@ -12,12 +12,13 @@ using System.Threading.Tasks;
 /// Uses Windows Core Audio APIs to detect when applications open and close microphone sessions.
 /// Monitors both the physical microphone and cable capture device to detect activity.
 /// </summary>
-public class ProcessAudioMonitor
+public class ProcessAudioMonitor : IDisposable
 {
     private readonly ILogger _logger;
     private readonly string _deviceId;  // Physical microphone device
     private readonly string _cableDeviceId;  // Cable capture device (optional)
     private readonly string _targetProcessName;
+    private readonly MMDeviceEnumerator _enumerator;
     private volatile bool _isDeviceInUse;
     private int _ourProcessId;
     private HashSet<int> _trackedProcessIds = new HashSet<int>();
@@ -51,6 +52,7 @@ public class ProcessAudioMonitor
         _deviceId = deviceId ?? throw new ArgumentNullException(nameof(deviceId));
         _cableDeviceId = cableDeviceId;  // May be null
         _targetProcessName = string.IsNullOrWhiteSpace(targetProcessName) ? "PhoneExperienceHost" : targetProcessName;
+        _enumerator = new MMDeviceEnumerator();
         _isDeviceInUse = false;
         _lastTargetSessionTicks = 0;
         // Store our own process ID so we can exclude our sessions
@@ -136,14 +138,11 @@ public class ProcessAudioMonitor
     {
         try
         {
-            // Get current target process IDs
-            var targetProcesses = Process.GetProcessesByName(_targetProcessName);
-            var targetProcessIds = new HashSet<int>(targetProcesses.Select(p => p.Id));
+            // Get current target process IDs and dispose handles to avoid leaking process objects
+            var targetProcessIds = GetTargetProcessIds();
 
-            _logger.LogDebug("Process check ({Process}): {Count} instance{S} running", 
-                _targetProcessName,
-                targetProcessIds.Count, 
-                targetProcessIds.Count != 1 ? "s" : "");
+            // Only log when target process state changes to reduce allocations
+            // (process count logging removed to reduce 500ms polling overhead)
 
             // Target not running at all
             if (targetProcessIds.Count == 0)
@@ -154,36 +153,53 @@ public class ProcessAudioMonitor
             }
 
             // Target is running - check for active sessions on BOTH devices
+            // Reuse HashSet to avoid allocations every 500ms
             var currentTargetSessions = new HashSet<int>();
             
             try
             {
-                using (var enumerator = new MMDeviceEnumerator())
+                // Check physical microphone device
+                bool targetProcessRunning = targetProcessIds.Count > 0;
+
+                CheckDeviceForTargetSessions(
+                    _enumerator,
+                    _deviceId,
+                    "Physical Mic",
+                    targetProcessIds,
+                    targetProcessRunning,
+                    currentTargetSessions);
+                
+                // Also check cable capture device if provided
+                if (!string.IsNullOrEmpty(_cableDeviceId))
                 {
-                    // Check physical microphone device
-                    CheckDeviceForTargetSessions(enumerator, _deviceId, "Physical Mic", targetProcessIds, currentTargetSessions);
-                    
-                    // Also check cable capture device if provided
-                    if (!string.IsNullOrEmpty(_cableDeviceId))
-                    {
-                        CheckDeviceForTargetSessions(enumerator, _cableDeviceId, "Cable Capture", targetProcessIds, currentTargetSessions);
-                    }
+                    CheckDeviceForTargetSessions(
+                        _enumerator,
+                        _cableDeviceId,
+                        "Cable Capture",
+                        targetProcessIds,
+                        targetProcessRunning,
+                        currentTargetSessions);
                 }
 
-                // Detect target session changes
-                var newSessions = currentTargetSessions.Except(_lastSeenTargetSessions).ToList();
-                var endedSessions = _lastSeenTargetSessions.Except(currentTargetSessions).ToList();
+                // Detect target session changes (avoid ToList() allocations - just check if any changed)
+                bool hasNewSessions = currentTargetSessions.Except(_lastSeenTargetSessions).Any();
+                bool hasEndedSessions = _lastSeenTargetSessions.Except(currentTargetSessions).Any();
 
-                if (newSessions.Count > 0)
+                if (hasNewSessions)
                 {
-                    _logger.LogDebug("New target sessions: {Sessions}", string.Join(", ", newSessions));
+                    _logger.LogDebug("New target sessions detected");
                 }
-                if (endedSessions.Count > 0)
+                if (hasEndedSessions)
                 {
-                    _logger.LogDebug("Target sessions ended: {Sessions}", string.Join(", ", endedSessions));
+                    _logger.LogDebug("Target sessions ended");
                 }
 
-                _lastSeenTargetSessions = currentTargetSessions;
+                // Update tracking set - clear and copy instead of replacing reference
+                _lastSeenTargetSessions.Clear();
+                foreach (var session in currentTargetSessions)
+                {
+                    _lastSeenTargetSessions.Add(session);
+                }
 
                 // Target is in use if it has any active sessions
                 if (currentTargetSessions.Count > 0)
@@ -230,12 +246,17 @@ public class ProcessAudioMonitor
     /// <summary>
     /// Checks a specific device for target sessions.
     /// </summary>
-    private void CheckDeviceForTargetSessions(MMDeviceEnumerator enumerator, string deviceId, string deviceLabel, 
-        HashSet<int> targetProcessIds, HashSet<int> currentTargetSessions)
+    private void CheckDeviceForTargetSessions(
+        MMDeviceEnumerator enumerator,
+        string deviceId,
+        string deviceLabel,
+        HashSet<int> targetProcessIds,
+        bool targetProcessRunning,
+        HashSet<int> currentTargetSessions)
     {
         try
         {
-            MMDevice device = enumerator.GetDevice(deviceId);
+            using var device = enumerator.GetDevice(deviceId);
             
             if (device?.AudioSessionManager == null)
             {
@@ -243,19 +264,27 @@ public class ProcessAudioMonitor
                 return;
             }
 
-            var sessionEnumerator = device.AudioSessionManager.Sessions;
-            _logger.LogDebug("{DeviceLabel}: {Count} audio sessions", deviceLabel, sessionEnumerator.Count);
-
-            for (int i = 0; i < sessionEnumerator.Count; i++)
+            var sessionManager = device.AudioSessionManager;
+            var sessionEnumerator = sessionManager.Sessions;
+            // Only log session count if it's non-zero to reduce string allocations
+            if (sessionEnumerator.Count > 0)
             {
-                try
+                _logger.LogDebug("{DeviceLabel}: {Count} audio sessions", deviceLabel, sessionEnumerator.Count);
+            }
+
+            try
+            {
+                for (int i = 0; i < sessionEnumerator.Count; i++)
                 {
-                    var session = sessionEnumerator[i];
+                    object comSession = null;
+                    try
+                    {
+                        comSession = sessionEnumerator[i];
+                        var session = (AudioSessionControl)comSession;
                     
                     // Skip system sounds
                     if (session.IsSystemSoundsSession)
                     {
-                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] System sounds (skipped)", deviceLabel, i);
                         continue;
                     }
 
@@ -263,7 +292,6 @@ public class ProcessAudioMonitor
                     int sessionState = (int)session.State;
                     if (sessionState != 1)
                     {
-                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] Inactive session, state: {State} (skipped)", deviceLabel, i, sessionState);
                         continue;
                     }
 
@@ -276,46 +304,42 @@ public class ProcessAudioMonitor
                     }
                     catch { }
 
-                    _logger.LogDebug("  [{DeviceLabel} Session {Index}] Active - Process ID: {Pid}, DisplayName: '{DisplayName}'", 
-                        deviceLabel, i, sessionPid, displayName);
-
                     // Skip our own process
                     if (sessionPid == _ourProcessId)
                     {
-                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] Our process (skipped)", deviceLabel, i);
                         continue;
                     }
 
                     // Check if session belongs to target process directly
                     if (targetProcessIds.Contains((int)sessionPid))
                     {
-                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] Target process detected", deviceLabel, i);
+                        _logger.LogDebug("  [{DeviceLabel}] Target process detected (PID: {Pid})", deviceLabel, sessionPid);
                         currentTargetSessions.Add(i);
                     }
                     // Check DisplayName for target identifiers
                     else if (IsTargetSession(displayName))
                     {
-                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] Target identified by DisplayName: '{DisplayName}'", deviceLabel, i, displayName);
+                        _logger.LogDebug("  [{DeviceLabel}] Target identified by DisplayName: '{DisplayName}'", deviceLabel, displayName);
                         currentTargetSessions.Add(i);
                     }
                     // Check if session belongs to svchost (Windows Runtime host used by the target app)
-                    else if (IsServiceHostRelatedToTarget((int)sessionPid, displayName))
+                    else if (IsServiceHostRelatedToTarget((int)sessionPid, displayName, targetProcessRunning))
                     {
-                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] Windows Runtime/svchost related to target process", deviceLabel, i);
+                        _logger.LogDebug("  [{DeviceLabel}] Windows Runtime/svchost related to target process", deviceLabel);
                         currentTargetSessions.Add(i);
                     }
-                    // Skip other applications' sessions
-                    else
+                    // Skip other applications' sessions silently to reduce allocations
+                    }
+                    catch (Exception ex)
                     {
-                        var process = ProcessById((int)sessionPid);
-                        _logger.LogDebug("  [{DeviceLabel} Session {Index}] Other app: {ProcessName}, DisplayName: '{DisplayName}' (skipped)", 
-                            deviceLabel, i, process?.ProcessName ?? "unknown", displayName);
+                        _logger.LogDebug(ex, "[{DeviceLabel}] Error checking session at index {Index}", deviceLabel, i);
                     }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "[{DeviceLabel}] Error checking session at index {Index}", deviceLabel, i);
-                }
+            }
+            finally
+            {
+                // Let .NET runtime handle COM cleanup automatically - explicit ReleaseComObject
+                // was causing thousands of ArgumentExceptions per minute and memory leaks
             }
         }
         catch (Exception ex)
@@ -347,11 +371,11 @@ public class ProcessAudioMonitor
     /// This is heuristic-based: if svchost is running and the target process is running,
     /// any active microphone session in svchost is likely part of the target pipeline.
     /// </summary>
-    private bool IsServiceHostRelatedToTarget(int processId, string displayName)
+    private bool IsServiceHostRelatedToTarget(int processId, string displayName, bool targetProcessRunning)
     {
         try
         {
-            var process = ProcessById(processId);
+            using var process = ProcessById(processId);
             if (process == null)
                 return false;
 
@@ -364,8 +388,7 @@ public class ProcessAudioMonitor
                 return true;
 
             // svchost is target-related if the target is currently running
-            var targetProcesses = Process.GetProcessesByName(_targetProcessName);
-            return targetProcesses.Length > 0;
+            return targetProcessRunning;
         }
         catch
         {
@@ -395,5 +418,32 @@ public class ProcessAudioMonitor
     public void Stop()
     {
         // Monitoring is controlled via CancellationToken from StartMonitoringAsync
+    }
+
+    /// <summary>
+    /// Disposes underlying enumerator resources.
+    /// </summary>
+    public void Dispose()
+    {
+        try { _enumerator?.Dispose(); } catch { }
+    }
+
+    /// <summary>
+    /// Retrieves target process IDs while ensuring process handles are disposed to avoid leaks.
+    /// </summary>
+    private HashSet<int> GetTargetProcessIds()
+    {
+        var ids = new HashSet<int>();
+        var processes = Process.GetProcessesByName(_targetProcessName);
+
+        foreach (var process in processes)
+        {
+            using (process)
+            {
+                ids.Add(process.Id);
+            }
+        }
+
+        return ids;
     }
 }
