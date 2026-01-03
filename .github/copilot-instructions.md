@@ -487,9 +487,10 @@ When users **explicitly ask** you to investigate GitHub Actions workflows or CI/
 ### Available MCP Tools for GitHub Actions
 
 1. **github-mcp-server-actions_list** - List workflows, runs, jobs, and artifacts
-2. **github-mcp-server-actions_get** - Get workflow/run/job details and logs
-3. **github-mcp-server-get_job_logs** - Get logs for specific jobs or all failed jobs
-4. **github-mcp-server-actions_run_trigger** - Run, rerun, or cancel workflows
+2. **github-mcp-server-actions_get** - Get workflow/run/job details and log download URLs
+3. **github-mcp-server-actions_run_trigger** - Run, rerun, or cancel workflows
+
+**Note:** The `github-mcp-server-get_job_logs` tool referenced in some GitHub documentation does NOT exist. Use Step 4 below to download logs as a ZIP file.
 
 ### Standard Workflow Investigation Process
 
@@ -502,11 +503,18 @@ When asked to investigate workflow failures, follow this process:
    - owner: <repository_owner>
    - repo: <repository_name>
    - resource_id: ci.yml (or release.yml)
-   - per_page: 5 (limit results to avoid context overflow)
+   - per_page: 1 (MUST be 1-3 to avoid context overflow)
    - page: 1
+   - workflow_runs_filter:
+       branch: <branch_name> (REQUIRED when known)
+       status: "completed" (or "in_progress", etc.)
    ```
    This shows recent runs with status (success, failure, in_progress, etc.)
-   **CRITICAL:** Always use `per_page: 5` or smaller to prevent large responses from consuming context window
+   
+   **CRITICAL:** 
+   - Always use `per_page: 1` for initial investigation
+   - ALWAYS specify `branch` in workflow_runs_filter when known
+   - Use narrow filters to prevent large responses from consuming context window
 
 2. **Get Workflow Run Details:**
    ```
@@ -528,38 +536,44 @@ When asked to investigate workflow failures, follow this process:
    ```
    This shows all jobs in the run and their individual statuses
 
-4. **Get Job Logs:**
+4. **Get Workflow Run Logs URL:**
    ```
-   github-mcp-server-get_job_logs
+   github-mcp-server-actions_get
+   - method: get_workflow_run_logs_url
    - owner: <repository_owner>
    - repo: <repository_name>
-   - job_id: <job_id from step 3>
-   - return_content: true
-   - tail_lines: 500 (or more if needed)
+   - resource_id: <run_id>
    ```
-   This retrieves the actual log output to diagnose failures
+   This returns a download URL for the complete workflow logs as a ZIP archive
 
-5. **Get All Failed Job Logs (Alternative):**
+5. **Download and Extract Logs:**
+   Since there is no direct job log retrieval tool, you must download the ZIP file:
+   ```bash
+   # Download logs
+   curl -s "<logs_url_from_step_4>" --output /tmp/workflow_logs.zip
+   
+   # List contents to find failed job/step
+   unzip -l /tmp/workflow_logs.zip
+   
+   # Extract specific job logs
+   unzip -o /tmp/workflow_logs.zip "job-name/step-name.txt"
+   
+   # View last 100 lines of failed step
+   tail -100 "/tmp/job-name/step-name.txt"
    ```
-   github-mcp-server-get_job_logs
-   - owner: <repository_owner>
-   - repo: <repository_name>
-   - run_id: <run_id>
-   - failed_only: true
-   - return_content: true
-   - tail_lines: 500
-   ```
-   This gets logs for all failed jobs at once
 
 ### Common Investigation Scenarios
 
 #### Scenario 1: User Reports "CI is failing"
 ```
-1. List recent workflow runs to find the failing run
-2. Get workflow run details to see which jobs failed
-3. Get job logs for the failed job(s)
-4. Analyze logs to identify the root cause
-5. Propose a fix based on the error messages
+1. List recent workflow runs with narrow filters (per_page: 1, specific branch)
+2. Get workflow run details to see overall status
+3. List jobs to identify which job(s) failed
+4. Get workflow run logs URL
+5. Download logs ZIP file
+6. Extract and view failed job/step logs
+7. Analyze logs to identify the root cause
+8. Propose a fix based on the error messages
 ```
 
 #### Scenario 2: Check Current Build Status
@@ -571,39 +585,45 @@ When asked to investigate workflow failures, follow this process:
 
 #### Scenario 3: Investigate Test Failures
 ```
-1. List workflow runs for ci.yml
+1. List workflow runs for ci.yml with narrow filters
 2. Find runs with conclusion: "failure"
-3. Get job logs for "Run Unit Tests" step
-4. Parse test failure output
-5. Identify which tests failed and why
+3. List jobs to find "Build and Test" or similar job
+4. Download logs and extract test step logs
+5. Parse test failure output
+6. Identify which tests failed and why
 ```
 
 #### Scenario 4: Debug Release Workflow Issues
 ```
-1. List workflow runs for release.yml
+1. List workflow runs for release.yml with narrow filters
 2. Check if tag trigger worked correctly
-3. Verify build and test steps passed
-4. Check if release creation succeeded
-5. Validate artifact upload
+3. List jobs to verify build and test steps
+4. Download and check logs if any step failed
+5. Validate artifact upload from logs
 ```
 
 ### Workflow Filtering Options
 
 When listing workflow runs, you can filter by:
+When listing workflow runs, you can filter by:
 - **status:** queued, in_progress, completed, requested, waiting
-- **branch:** Filter to specific branch (e.g., main, develop)
+- **branch:** Filter to specific branch (e.g., main, develop) - **HIGHLY RECOMMENDED**
 - **event:** Filter by trigger event (push, pull_request, tag, etc.)
 - **actor:** Filter to runs triggered by specific user
+
+**Always use as many filters as possible** to minimize response size.
 
 Example:
 ```
 github-mcp-server-actions_list
 - method: list_workflow_runs
+- owner: mikejhill
+- repo: mic-passthrough
 - resource_id: ci.yml
-- per_page: 5
+- per_page: 1
 - workflow_runs_filter:
     status: "completed"
-    branch: "main"
+    branch: "copilot/test-github-actions-process"
 ```
 
 ### Triggering and Managing Workflows
@@ -648,17 +668,23 @@ github-mcp-server-actions_run_trigger
 
 ### Best Practices
 
-1. **Always limit result size** when calling `list_workflow_runs` or `list_workflows`:
-   - Use `per_page: 5` or smaller to prevent context overflow
+1. **Always use narrow filters** when calling `list_workflow_runs`:
+   - Use `per_page: 1` for initial investigation (never more than 3)
+   - ALWAYS specify `branch` in workflow_runs_filter when known
+   - Add `status` filter to further limit results
    - MCP tool responses can be very large and consume your context window
-   - Start with the most recent results using `page: 1`
 2. **Always start with list_workflow_runs** to get recent run IDs
-3. **Use return_content: true** when getting job logs to see actual output
-4. **Adjust tail_lines** based on log size (default 500 may be insufficient)
+3. **Download logs as ZIP files** - the `get_job_logs` tool does not exist
+   - Use `get_workflow_run_logs_url` to get download URL
+   - Use `curl` to download the ZIP file
+   - Use `unzip` to extract specific job/step logs
+4. **Use tail to view log ends** - errors are typically at the end of logs
+   - `tail -100` or `tail -200` for last N lines
+   - Use `grep` to search for specific error patterns if needed
 5. **Check multiple jobs** if workflow has parallel jobs (build-and-test, license-compliance)
-5. **Look for patterns** in failures (flaky tests, environment issues, dependency problems)
-6. **Provide specific error messages** from logs when proposing fixes
-7. **Never guess** - always check actual logs before diagnosing issues
+6. **Look for patterns** in failures (flaky tests, environment issues, dependency problems)
+7. **Provide specific error messages** from logs when proposing fixes
+8. **Never guess** - always check actual logs before diagnosing issues
 
 ### Log Analysis Tips
 
@@ -675,24 +701,45 @@ When analyzing job logs:
 ```
 User: "The CI build is failing, can you check?"
 
-1. github-mcp-server-actions_list (method: list_workflow_runs, resource_id: ci.yml)
-   → Find most recent run with conclusion: "failure"
+1. github-mcp-server-actions_list 
+   - method: list_workflow_runs
+   - resource_id: ci.yml
+   - per_page: 1
+   - workflow_runs_filter: {branch: "main", status: "completed"}
+   → Find most recent run with conclusion: "failure", run_id: 20673434005
 
-2. github-mcp-server-actions_list (method: list_workflow_jobs, resource_id: <run_id>)
-   → Identify which job failed (e.g., "Build and Test")
+2. github-mcp-server-actions_list 
+   - method: list_workflow_jobs
+   - resource_id: 20673434005
+   → Identify which job failed (e.g., "license-compliance / ORT License Compliance")
+   → Failed job_id: 59358549325
 
-3. github-mcp-server-get_job_logs (job_id: <job_id>, return_content: true, tail_lines: 1000)
+3. github-mcp-server-actions_get
+   - method: get_workflow_run_logs_url
+   - resource_id: 20673434005
+   → Get logs download URL
+
+4. Download and extract logs:
+   curl -s "<url>" --output /tmp/logs.zip
+   unzip -l /tmp/logs.zip
+   unzip -o /tmp/logs.zip "license-compliance _ ORT License Compliance/3_Run ORT (analyze, evaluate, report).txt"
+   tail -100 "/tmp/license-compliance _ ORT License Compliance/3_Run ORT (analyze, evaluate, report).txt"
    → Retrieve logs showing:
-     "error CS1002: ; expected"
-     "  at Program.cs line 42"
+     "Error: invalid value for -r: file \".ort/policy/rules.kts\" does not exist."
 
-4. Analyze the error:
-   → Missing semicolon in Program.cs at line 42
+5. Analyze the error:
+   → Missing .ort/policy/rules.kts file
 
-5. Propose fix:
-   → "The CI is failing because of a syntax error in Program.cs line 42.
-      A semicolon is missing. I'll fix this now."
+6. Propose fix:
+   → "The CI is failing because the ORT license compliance check cannot find the
+      .ort/policy/rules.kts file. We need to create this file or adjust the
+      ORT configuration."
 ```
+
+### Additional Resources
+
+For detailed guidance on investigating GitHub Actions workflows, see:
+- **docs/guides/github-actions-investigation.md** - Complete investigation guide with examples
 
 ## When Generating Code
 
