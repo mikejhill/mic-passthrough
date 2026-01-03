@@ -16,26 +16,73 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Run ORT Analysis and Evaluation
-      uses: oss-review-toolkit/ort-ci-github-action@v1
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
       with:
-        # Run ORT analyzer, evaluator, and reporter
-        run: 'analyze evaluate report'
-        
-        # Package managers to analyze
-        ort-cli-analyze-args: '--package-managers NuGet'
-        
-        # Use local policy rules for evaluation
-        ort-cli-evaluate-args: '--rules-file ${{ github.workspace }}/.ort/policy/rules.kts'
-        
-        # Generate multiple report formats for comprehensive review
-        report-formats: 'CycloneDx,SpdxDocument,WebApp'
-        
-        # Fail the build on policy violations (incompatible licenses)
-        fail-on: 'violations'
-        
-        # Allow ORT to download package sources for license detection
-        allow-dynamic-versions: 'true'
+        dotnet-version: '10.0.x'
+
+    - name: Install ORT
+      run: |
+        echo "Installing ORT CLI..."
+        wget -q https://github.com/oss-review-toolkit/ort/releases/download/24.11.0/ort-24.11.0.tar.gz
+        tar -xzf ort-24.11.0.tar.gz
+        echo "$(pwd)/ort-24.11.0/bin" >> $GITHUB_PATH
+        echo "ORT_DATA_DIR=$(pwd)/.ort" >> $GITHUB_ENV
+
+    - name: Run ORT Analyzer
+      run: |
+        echo "========================================="
+        echo "Running ORT Analyzer on NuGet packages..."
+        echo "========================================="
+        mkdir -p .ort/analyzer
+        ort analyze \
+          --package-managers NuGet \
+          --output-dir .ort/analyzer \
+          --output-formats YAML,JSON \
+          .
+        echo "Analyzer complete."
+        ls -lah .ort/analyzer/
+
+    - name: Run ORT Evaluator
+      run: |
+        echo "==========================================="
+        echo "Running ORT Evaluator with policy rules..."
+        echo "==========================================="
+        mkdir -p .ort/evaluator
+        ort evaluate \
+          --input-file .ort/analyzer/analyzer-result.yml \
+          --rules-file .ort/policy/rules.kts \
+          --output-dir .ort/evaluator \
+          --output-formats YAML,JSON
+        echo "Evaluator complete."
+        ls -lah .ort/evaluator/
+
+    - name: Run ORT Reporter
+      run: |
+        echo "======================================="
+        echo "Generating ORT compliance reports..."
+        echo "======================================="
+        mkdir -p .ort/reporter
+        ort report \
+          --input-file .ort/analyzer/analyzer-result.yml \
+          --report-formats CycloneDx,SpdxDocument,WebApp \
+          --output-dir .ort/reporter
+        echo "Reporter complete."
+        ls -lah .ort/reporter/
+
+    - name: Check for Policy Violations
+      run: |
+        echo "======================================="
+        echo "Checking for license policy violations..."
+        echo "======================================="
+        if grep -q "violations:" .ort/evaluator/evaluation-result.yml; then
+          echo "❌ License policy violations detected!"
+          echo "Review the evaluation results for details."
+          grep -A 20 "violations:" .ort/evaluator/evaluation-result.yml || true
+          exit 1
+        else
+          echo "✅ No license policy violations found."
+        fi
 
     - name: Upload ORT Results
       uses: actions/upload-artifact@v4
@@ -43,8 +90,10 @@ jobs:
       with:
         name: ort-results
         path: |
-          .ort/analyzer/analyzer-result.yml
-          .ort/evaluator/evaluation-result.yml
+          .ort/analyzer/*.yml
+          .ort/analyzer/*.json
+          .ort/evaluator/*.yml
+          .ort/evaluator/*.json
           .ort/reporter/**/*
         retention-days: 90
         
@@ -54,10 +103,7 @@ jobs:
       with:
         name: license-reports
         path: |
-          .ort/reporter/*.html
-          .ort/reporter/*.pdf
-          .ort/reporter/*.spdx.*
-          .ort/reporter/*.cyclonedx.*
+          .ort/reporter/*
         retention-days: 90
 
     - name: Comment PR with Results
@@ -68,7 +114,7 @@ jobs:
           const fs = require('fs');
           const evaluationFile = '.ort/evaluator/evaluation-result.yml';
           
-          let comment = '## ORT License Compliance Results\n\n';
+          let comment = '## 📋 ORT License Compliance Results\n\n';
           
           if (fs.existsSync(evaluationFile)) {
             const content = fs.readFileSync(evaluationFile, 'utf8');
@@ -76,15 +122,15 @@ jobs:
             
             if (hasViolations) {
               comment += '❌ **FAILED** - License policy violations detected\n\n';
-              comment += 'Please review the ORT results artifact for details.\n';
+              comment += 'Review the [ORT Results](../artifacts) for detailed violation information.\n';
             } else {
-              comment += '✅ **PASSED** - All dependencies use approved licenses\n\n';
+              comment += '✅ **PASSED** - All dependencies use MIT-compatible licenses\n\n';
             }
           } else {
             comment += '⚠️ **UNKNOWN** - Could not read evaluation results\n\n';
           }
           
-          comment += 'View detailed reports in the workflow artifacts.';
+          comment += '\n📦 View [License Reports](../artifacts) and [ORT Results](../artifacts) in workflow artifacts.';
           
           github.rest.issues.createComment({
             issue_number: context.issue.number,
