@@ -446,6 +446,8 @@ See [docs/QUICK_RELEASE.md](../docs/QUICK_RELEASE.md) for checklist.
 
 **Triggers:** Push to main/develop, pull requests to main/develop
 
+**IMPORTANT:** When working as a Copilot agent, PR workflows may not auto-start. See [CRITICAL: PR Workflows May Not Auto-Start](#critical-pr-workflows-may-not-auto-start) below for details on checking and manually triggering workflows.
+
 **Steps:**
 1. Checkout code
 2. Setup .NET 10.0 SDK
@@ -489,6 +491,39 @@ When users **explicitly ask** you to investigate GitHub Actions workflows or CI/
 1. **github-mcp-server-actions_list** - List workflows, runs, jobs, and artifacts
 2. **github-mcp-server-actions_get** - Get workflow/run/job details and log download URLs
 3. **github-mcp-server-actions_run_trigger** - Run, rerun, or cancel workflows
+
+### CRITICAL: PR Workflows May Not Auto-Start
+
+**When working as a GitHub Copilot coding agent creating or updating pull requests:**
+
+- **PR workflows (`pull_request` triggers) may NOT automatically start** when you create or update the PR
+- GitHub's security model often prevents workflows from running on PRs created by automation/bots without explicit approval
+- **DO NOT wait indefinitely for PR workflows to start** - they likely won't start without intervention
+
+**Required Actions:**
+
+1. **Always check if workflows have started** after creating/updating a PR:
+   - Use `list_workflow_runs` with the PR's branch name
+   - Check if any runs exist for your branch with `event: "pull_request"`
+   - If no runs found, the workflow did not auto-start
+
+2. **If workflows have NOT started, you MUST manually trigger them:**
+   ```
+   github-mcp-server-actions_run_trigger
+   - method: run_workflow
+   - owner: <repository_owner>
+   - repo: <repository_name>
+   - workflow_id: ci.yml
+   - ref: <your_branch_name>
+   - inputs: {}
+   ```
+
+3. **If workflows HAVE started** (triggered by a separate author or manual approval):
+   - Proceed with normal investigation process
+   - Check workflow status and results
+   - Address any failures
+
+**Summary:** Always verify workflow status, but expect that you'll need to manually trigger PR workflows yourself. Do not assume they will eventually start on their own.
 
 ### Standard Workflow Investigation Process
 
