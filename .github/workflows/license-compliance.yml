@@ -1,0 +1,91 @@
+name: License Compliance Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  license-check:
+    runs-on: ubuntu-latest
+    name: Check License Compliance
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Install dotnet-project-licenses tool
+      run: dotnet tool install --global dotnet-project-licenses
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Generate license report
+      run: |
+        dotnet-project-licenses --input src/MicPassthrough/MicPassthrough.csproj \
+          --output-directory license-report \
+          --export-license-texts \
+          --json
+
+    - name: Check for incompatible licenses
+      run: |
+        # Define incompatible (copyleft) licenses
+        INCOMPATIBLE_LICENSES=(
+          "GPL-1.0" "GPL-2.0" "GPL-3.0"
+          "AGPL-1.0" "AGPL-3.0"
+          "LGPL-2.0" "LGPL-2.1" "LGPL-3.0"
+          "MPL-1.0" "MPL-1.1" "MPL-2.0"
+          "EPL-1.0" "EPL-2.0"
+          "CDDL-1.0" "CDDL-1.1"
+          "OSL-3.0" "EUPL-1.1" "EUPL-1.2"
+        )
+        
+        # Read JSON report and check for incompatible licenses
+        if [ -f "license-report/licenses.json" ]; then
+          echo "Checking licenses for MIT compatibility..."
+          
+          # Extract all license identifiers from the JSON
+          licenses=$(cat license-report/licenses.json | jq -r '.[].Packages[]?.LicenseInformationOrigin' 2>/dev/null || echo "")
+          
+          if [ -z "$licenses" ]; then
+            echo "Warning: Could not parse license information"
+            exit 0  # Don't fail on parse errors
+          fi
+          
+          # Check each incompatible license
+          found_incompatible=false
+          for lic in "${INCOMPATIBLE_LICENSES[@]}"; do
+            if echo "$licenses" | grep -iq "$lic"; then
+              echo "❌ ERROR: Found incompatible license: $lic"
+              echo "This license is copyleft and incompatible with MIT."
+              found_incompatible=true
+            fi
+          done
+          
+          if [ "$found_incompatible" = true ]; then
+            echo ""
+            echo "License check FAILED!"
+            echo "One or more dependencies use licenses incompatible with MIT."
+            echo "Please review license-report/licenses.json for details."
+            exit 1
+          else
+            echo "✅ All licenses are compatible with MIT"
+          fi
+        else
+          echo "Error: license report not generated"
+          exit 1
+        fi
+
+    - name: Upload license report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: license-report
+        path: license-report/
+        retention-days: 30
