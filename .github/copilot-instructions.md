@@ -482,7 +482,7 @@ See [docs/QUICK_RELEASE.md](../docs/QUICK_RELEASE.md) for checklist.
 
 ## Investigating GitHub Actions Workflows
 
-When users mention CI or workflow failures, **ALWAYS** use GitHub MCP tools to investigate. **NEVER** claim you cannot access CI logs - you have GitHub MCP server tools available.
+When users **explicitly ask** you to investigate GitHub Actions workflows or CI/workflow failures, use the GitHub MCP tools described below. Do not claim you cannot access logs - you have these tools available.
 
 ### Available MCP Tools for GitHub Actions
 
@@ -493,7 +493,7 @@ When users mention CI or workflow failures, **ALWAYS** use GitHub MCP tools to i
 
 ### Standard Workflow Investigation Process
 
-**ALWAYS** follow this workflow when investigating CI failures:
+When asked to investigate workflow failures, follow this process:
 
 1. **List Recent Workflow Runs:**
    ```
