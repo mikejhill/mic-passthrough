@@ -227,7 +227,7 @@ Use the GitHub MCP server tools to exercise the documented workflows without lea
 
 1. **List workflow runs:** `list_workflow_runs` with `resource_id: ci.yml` (or `release.yml`) using the workflow filename (e.g., `ci.yml`, not `.github/workflows/ci.yml`) to confirm triggers and status.
 2. **Inspect jobs:** `list_workflow_jobs` for the chosen `run_id` to see each job (CI: `license-compliance`, `build-and-test` job ID with display name "Build and Test"; Release: `license-compliance`, `release`).
-3. **Fetch logs:** `get_job_logs` with `return_content: true` (optionally `failed_only: true`) to review step output and test failures.
+3. **Fetch logs (run-level ZIP):** `get_workflow_run_logs_url` for the `run_id`, download the ZIP, then extract the relevant job folder (e.g., `Build and Test/*.txt`, `license-compliance _ ORT License Compliance/*.txt`) to read step output and failures.
 4. **Rerun if needed:** `rerun_workflow_run` or `rerun_failed_jobs` to re-execute the same workflow after fixes.
 
 This mirrors the UI-driven steps described above, but keeps workflow monitoring and analysis testable directly from automation tooling.
