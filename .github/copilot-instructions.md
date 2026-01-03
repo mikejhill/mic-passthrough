@@ -503,7 +503,7 @@ When users **explicitly ask** you to investigate GitHub Actions workflows or CI/
 **Required Actions:**
 
 1. **Always check if workflows have started** after creating/updating a PR:
-   - Use `list_workflow_runs` with the PR's branch name
+   - Use `github-mcp-server-actions_list` with `method: list_workflow_runs` and the PR's branch name
    - Check if any runs exist for your branch with `event: "pull_request"`
    - If no runs found, the workflow did not auto-start
 
