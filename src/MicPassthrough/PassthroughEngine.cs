@@ -21,6 +21,9 @@ class PassthroughEngine
     private WasapiOut _monitorOut;
     private BufferedWaveProvider _cableBuffer;
     private BufferedWaveProvider _monitorBuffer;
+    private MMDevice _micDevice;
+    private MMDevice _cableDevice;
+    private MMDevice _monitorDevice;
 
     // Statistics
     private long _totalBytesProcessed;
@@ -62,18 +65,18 @@ class PassthroughEngine
             micName, cableInName, monitorName, enableMonitoring, _bufferMs, _tryExclusiveMode, _prebufferFrames);
 
         // Find and validate devices
-        var mic = _deviceManager.FindDevice(DataFlow.Capture, micName);
-        var cableIn = _deviceManager.FindDevice(DataFlow.Render, cableInName);
-        var monitor = enableMonitoring ? _deviceManager.FindDevice(DataFlow.Render, monitorName) : null;
+        _micDevice = _deviceManager.FindDevice(DataFlow.Capture, micName);
+        _cableDevice = _deviceManager.FindDevice(DataFlow.Render, cableInName);
+        _monitorDevice = enableMonitoring ? _deviceManager.FindDevice(DataFlow.Render, monitorName) : null;
 
         // Initialize capture
-        InitializeCapture(mic);
+        InitializeCapture(_micDevice);
 
         // Initialize outputs
-        InitializeCableOutput(cableIn);
+        InitializeCableOutput(_cableDevice);
         if (enableMonitoring)
         {
-            InitializeMonitorOutput(monitor);
+            InitializeMonitorOutput(_monitorDevice);
         }
 
         // Set up audio processing
@@ -115,6 +118,9 @@ class PassthroughEngine
         _cableOut?.Dispose();
         _monitorOut?.Dispose();
         _capture?.Dispose();
+        _micDevice?.Dispose();
+        _cableDevice?.Dispose();
+        _monitorDevice?.Dispose();
         _logger.LogInformation("Shutdown complete. Total: {FrameCount} frames, {BytesProcessed:N0} bytes processed", 
             _frameCount, _totalBytesProcessed);
     }

@@ -151,7 +151,7 @@ class Program
         });
 
         var logger = loggerFactory.CreateLogger<Program>();
-        var deviceManager = new AudioDeviceManager(logger);
+        using var deviceManager = new AudioDeviceManager(logger);
         var application = new PassthroughApplication(logger, deviceManager);
 
         if (opts.Daemon)
@@ -206,6 +206,7 @@ class Program
         CancellationTokenSource monitorCts = null;  // To stop monitor thread
         Thread monitorThread = null;  // Reference to monitor thread so we can join it
         WindowsDefaultMicrophoneManager micManager = null;  // For microphone switching in enabled mode
+        AudioDeviceManager activeDeviceManager = null;      // For disposing after engine teardown
 
         // Create a wrapper logger that also updates the status window
         var wrappedLogger = new DaemonLoggerWrapper(logger, (msg) =>
@@ -228,6 +229,7 @@ class Program
                 {
                     logger.LogInformation("Starting passthrough engine");
                     var deviceManager = new AudioDeviceManager(wrappedLogger);
+                    activeDeviceManager = deviceManager;
                     engine = new PassthroughEngine(wrappedLogger, deviceManager,
                         opts.Buffer, opts.ExclusiveMode, opts.PrebufferFrames);
 
@@ -241,7 +243,7 @@ class Program
                         {
                             micManager = new WindowsDefaultMicrophoneManager(wrappedLogger);
                             // Find the device ID for CABLE Output
-                            var cableDevice = deviceManager.FindDevice(DataFlow.Capture, opts.CableCapture);
+                            using var cableDevice = deviceManager.FindDevice(DataFlow.Capture, opts.CableCapture);
                             micManager.SetDefaultMicrophone(cableDevice.ID);
                             logger.LogInformation("Set default microphone to CABLE Output");
                         }
@@ -267,6 +269,8 @@ class Program
                     trayUI.IsPassthroughActive = false;
                     statusWindow.SetStatus(false);
                     trayUI.ShowNotification("Microphone Passthrough", $"Failed to start: {ex.Message}");
+                    activeDeviceManager?.Dispose();
+                    activeDeviceManager = null;
                 }
             }
         }
@@ -288,6 +292,8 @@ class Program
                     engine.Stop();
                     engine.Dispose();
                     engine = null;
+                    activeDeviceManager?.Dispose();
+                    activeDeviceManager = null;
 
                     // Restore original microphone if we switched it
                     if (micManager != null)

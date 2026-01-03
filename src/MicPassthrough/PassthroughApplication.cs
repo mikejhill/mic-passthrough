@@ -122,8 +122,8 @@ public class PassthroughApplication
             options.ExclusiveMode,
             options.PrebufferFrames);
 
-        var micDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Capture, options.Mic);
-        var cableCaptureDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Capture, options.CableCapture);
+        using var micDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Capture, options.Mic);
+        using var cableCaptureDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Capture, options.CableCapture);
         
         // Create monitor that checks BOTH the physical mic AND cable capture device
         // This allows detecting if the monitored app switches between devices during the call handoff
@@ -131,7 +131,7 @@ public class PassthroughApplication
         var monitor = new ProcessAudioMonitor(_logger, micDevice.ID, cableCaptureDeviceId, options.TargetProcessName);
         var micManager = new WindowsDefaultMicrophoneManager(_logger);
         // CABLE Input is a Render device (output), not Capture
-        var cableDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Render, options.CableRender);
+        using var cableDevice = _deviceManager.FindDevice(NAudio.CoreAudioApi.DataFlow.Render, options.CableRender);
 
         bool engineRunning = false;
 
